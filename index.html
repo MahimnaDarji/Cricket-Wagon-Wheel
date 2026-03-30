@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cricket Analytics | Access</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="stadium-shell">
+    <section class="field-stage" aria-hidden="true">
+      <div class="outer-field-ring"></div>
+      <div class="inner-field-ring"></div>
+      <div class="pitch-strip">
+        <span class="crease top"></span>
+        <span class="crease bottom"></span>
+      </div>
+      <div class="arc-offside"></div>
+      <div class="arc-legside"></div>
+    </section>
+
+    <section class="control-rig" aria-label="Authentication panel">
+      <div class="rig-head">
+        <h2>Access Workspace</h2>
+        <p class="rig-sub">Login or create an account to continue.</p>
+      </div>
+
+      <div class="auth-panel">
+        <div class="auth-toggle" role="tablist" aria-label="Authentication forms">
+          <button id="tab-login" class="tab active" type="button" role="tab" aria-selected="true" aria-controls="panel-login">Login</button>
+          <button id="tab-signup" class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-signup">Sign up</button>
+        </div>
+
+        <section id="panel-login" class="form-panel active" role="tabpanel" aria-labelledby="tab-login">
+          <form id="login-form" novalidate>
+            <label for="login-email">Email</label>
+            <input id="login-email" name="email" type="email" placeholder="analyst@cricketlab.com" autocomplete="email" required />
+
+            <label for="login-password">Password</label>
+            <input id="login-password" name="password" type="password" placeholder="Enter your password" autocomplete="current-password" required />
+
+            <div id="login-feedback" class="feedback" aria-live="polite"></div>
+
+            <button type="submit" class="cta primary">Login</button>
+          </form>
+
+          <button type="button" class="cta google" data-google-action="login">
+            <span class="google-mark" aria-hidden="true">G</span>
+            Login with Google
+          </button>
+        </section>
+
+        <section id="panel-signup" class="form-panel" role="tabpanel" aria-labelledby="tab-signup" hidden>
+          <form id="signup-form" novalidate>
+            <label for="signup-name">Name</label>
+            <input id="signup-name" name="name" type="text" placeholder="Full name" autocomplete="name" required />
+
+            <label for="signup-email">Email</label>
+            <input id="signup-email" name="email" type="email" placeholder="you@club.com" autocomplete="email" required />
+
+            <label for="signup-password">Password</label>
+            <input id="signup-password" name="password" type="password" placeholder="Create a strong password" autocomplete="new-password" required />
+
+            <label for="signup-confirm-password">Confirm password</label>
+            <input id="signup-confirm-password" name="confirmPassword" type="password" placeholder="Re-enter password" autocomplete="new-password" required />
+
+            <div id="signup-feedback" class="feedback" aria-live="polite"></div>
+
+            <button type="submit" class="cta primary">Create Account</button>
+          </form>
+
+          <button type="button" class="cta google" data-google-action="signup">
+            <span class="google-mark" aria-hidden="true">G</span>
+            Sign up with Google
+          </button>
+        </section>
+
+        <button id="guest-btn" class="cta ghost" type="button">Continue as Guest</button>
+        <div id="guest-feedback" class="feedback" aria-live="polite"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="script.js" defer></script>
+</body>
+</html>
