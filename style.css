@@ -30,6 +30,7 @@ body {
   color: var(--crease-white);
   background: radial-gradient(circle at 20% 15%, #4f7756 0%, var(--grass-main) 40%, var(--grass-deep) 100%);
   padding: 0.8rem 1rem;
+  overflow-x: hidden;
 }
 
 .stadium-shell {
@@ -53,6 +54,38 @@ body {
     inset 0 -28px 42px rgba(0, 0, 0, 0.24),
     0 24px 46px rgba(0, 0, 0, 0.32);
   overflow: hidden;
+}
+
+.shot-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.shot-reference-path {
+  fill: none;
+  stroke: rgba(244, 242, 234, 0.2);
+  stroke-width: 1.8;
+}
+
+.shot-active-trail {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.62);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  opacity: 0;
+}
+
+.wagon-ball {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #f6e2e2 0%, #ce4343 65%, #8f1d1d 100%);
+  box-shadow: 0 0 0 1px rgba(255, 243, 243, 0.44), 0 2px 6px rgba(0, 0, 0, 0.34);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  opacity: 0;
 }
 
 .outer-field-ring,
@@ -339,6 +372,19 @@ input.input-success {
   margin-top: 0.14rem;
 }
 
+.field-error {
+  min-height: 12px;
+  margin: 0.08rem 0 0.14rem;
+  color: var(--error-text);
+  font-size: 0.84rem;
+  line-height: 1.25;
+}
+
+.field-error:empty {
+  min-height: 0;
+  margin: 0;
+}
+
 .feedback.state {
   border-radius: 2px;
   border: 1px solid;
@@ -359,6 +405,43 @@ input.input-success {
   color: var(--success-text);
 }
 
+@media (max-width: 1100px) {
+  body {
+    padding: 0.7rem 0.8rem;
+  }
+
+  .stadium-shell {
+    width: min(780px, 96vw);
+    min-height: auto;
+    grid-template-columns: 1fr;
+    row-gap: 0.9rem;
+    align-items: start;
+  }
+
+  .field-stage {
+    width: 100%;
+    height: clamp(280px, 42vh, 420px);
+    border-radius: 29% 31% 34% 32% / 36% 30% 40% 34%;
+  }
+
+  .pitch-strip {
+    left: 41.5%;
+    width: 18%;
+    min-width: 92px;
+  }
+
+  .control-rig {
+    width: min(100%, 520px);
+    justify-self: center;
+    row-gap: 0.52rem;
+  }
+
+  .rig-head,
+  .auth-panel {
+    width: 100%;
+  }
+}
+
 @media (max-width: 920px) {
   .stadium-shell {
     width: min(700px, 96vw);
@@ -369,13 +452,14 @@ input.input-success {
   }
 
   .field-stage {
-    height: min(360px, 38vh);
+    height: clamp(250px, 38vh, 360px);
     border-radius: 26% 31% 34% 32% / 36% 29% 39% 34%;
   }
 
   .pitch-strip {
-    left: 41%;
+    left: 41.5%;
     width: 18%;
+    min-width: 84px;
   }
 
   .control-rig {
@@ -385,6 +469,103 @@ input.input-success {
 
   .auth-panel {
     padding: 0.5rem 0.78rem 0.56rem;
+  }
+}
+
+@media (max-width: 680px) {
+  body {
+    padding: 0.55rem 0.55rem;
+  }
+
+  .stadium-shell {
+    width: 100%;
+    row-gap: 0.68rem;
+  }
+
+  .field-stage {
+    height: clamp(210px, 35vh, 300px);
+  }
+
+  .shot-reference-path {
+    stroke-width: 1.45;
+  }
+
+  .shot-active-trail {
+    stroke-width: 2.1;
+  }
+
+  .wagon-ball {
+    width: 9px;
+    height: 9px;
+  }
+
+  .control-rig {
+    width: min(100%, 460px);
+  }
+
+  .rig-head {
+    padding: 0.62rem 0.68rem 0.6rem;
+  }
+
+  .rig-head h2 {
+    font-size: clamp(1.58rem, 8vw, 2.02rem);
+  }
+
+  .rig-sub {
+    font-size: 0.9rem;
+  }
+
+  .auth-panel {
+    padding: 0.46rem 0.64rem 0.52rem;
+  }
+
+  .tab {
+    min-height: 44px;
+    font-size: 0.95rem;
+    padding: 0.42rem 0.56rem;
+  }
+
+  label {
+    font-size: 0.79rem;
+  }
+
+  input {
+    min-height: 44px;
+    font-size: 1rem;
+    padding: 0.52rem 0.66rem;
+  }
+
+  .cta {
+    min-height: 44px;
+    font-size: 0.96rem;
+  }
+
+  .feedback.state {
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 430px) {
+  .field-stage {
+    height: clamp(195px, 33vh, 260px);
+  }
+
+  .pitch-strip {
+    min-width: 72px;
+    width: 19%;
+  }
+
+  .auth-panel::after {
+    width: 10px;
+  }
+
+  .auth-panel {
+    padding: 0.42rem 0.56rem 0.48rem;
+  }
+
+  .google-mark {
+    width: 22px;
+    height: 22px;
   }
 }
 

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cricket Wagon Wheel | Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="dashboard.css" />
+</head>
+<body>
+  <div class="dashboard-shell">
+    <header class="dash-header">
+      <div class="brand-wrap">
+        <p class="brand-eyebrow">Cricket Analytics Platform</p>
+        <h1>Wagon Wheel Control Desk</h1>
+      </div>
+      <div class="profile-wrap" aria-label="User profile and logout area">
+        <div class="profile-chip">
+          <span class="profile-label">Profile</span>
+          <strong>Analyst</strong>
+        </div>
+        <a class="logout-btn" href="index.html">Logout</a>
+      </div>
+    </header>
+
+    <main class="dash-layout">
+      <aside class="panel panel-left" aria-label="Controls and setup panel">
+        <h2>Stadium Setup</h2>
+
+        <section class="setup-block" aria-label="Stadium mode selection">
+          <p class="setup-label">Ground Mode</p>
+          <div class="mode-toggle" role="tablist" aria-label="Preset or custom stadium mode">
+            <button id="mode-preset" class="mode-btn active" type="button" role="tab" aria-selected="true">Preset</button>
+            <button id="mode-custom" class="mode-btn" type="button" role="tab" aria-selected="false">Custom</button>
+          </div>
+        </section>
+
+        <section id="preset-controls" class="setup-block" aria-label="Preset stadium selection">
+          <label class="setup-label" for="stadium-preset">Preset Stadium</label>
+          <select id="stadium-preset" class="setup-input">
+            <option value="mcg">Melbourne Cricket Ground</option>
+            <option value="lords">Lord's Cricket Ground</option>
+            <option value="wankhede">Wankhede Stadium</option>
+            <option value="eden">Eden Gardens</option>
+          </select>
+        </section>
+
+        <section id="custom-controls" class="setup-block is-hidden" aria-label="Custom boundary inputs">
+          <p class="setup-label">Custom Boundary Dimensions</p>
+
+          <label class="setup-field-label" for="straight-boundary">Straight Boundary (m)</label>
+          <input id="straight-boundary" class="setup-input" type="number" min="55" max="90" value="72" />
+
+          <label class="setup-field-label" for="square-boundary">Square Boundary (m)</label>
+          <input id="square-boundary" class="setup-input" type="number" min="55" max="90" value="67" />
+        </section>
+
+        <section class="setup-block live-update" aria-live="polite" aria-label="Live stadium update">
+          <p class="setup-label">Live Ground Update</p>
+          <p id="live-mode" class="live-line">Mode: Preset</p>
+          <p id="live-stadium" class="live-line">Stadium: Melbourne Cricket Ground</p>
+          <p id="live-boundaries" class="live-line">Straight: 72m | Square: 67m</p>
+        </section>
+      </aside>
+
+      <section class="ground-stage" aria-label="Interactive cricket ground visualization">
+        <div class="outer-ring"></div>
+        <div class="inner-ring"></div>
+        <div class="pitch-strip">
+          <span class="crease top"></span>
+          <span class="crease bottom"></span>
+        </div>
+        <div class="arc-offside"></div>
+        <div class="arc-legside"></div>
+        <div id="straight-marker" class="boundary-marker boundary-straight">Straight 72m</div>
+        <div id="square-marker" class="boundary-marker boundary-square">Square 67m</div>
+      </section>
+
+      <aside class="panel panel-right" aria-label="Player summary and shot details panel">
+        <h2>Player Summary</h2>
+        <div class="panel-slot">Batter profile and strike map placeholder.</div>
+        <div class="panel-slot">Shot-by-shot detail rail placeholder.</div>
+        <div class="panel-slot">Session notes and tags placeholder.</div>
+      </aside>
+    </main>
+  </div>
+
+  <script src="dashboard.js" defer></script>
+</body>
+</html>
