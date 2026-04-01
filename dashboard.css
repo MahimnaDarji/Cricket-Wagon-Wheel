@@ -303,6 +303,34 @@ body {
   pointer-events: none;
 }
 
+.shot-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.boundary-arrow-head-shape {
+  fill: rgba(244, 242, 234, 0.94);
+}
+
+.boundary-arrow-path,
+.boundary-arrow-active {
+  fill: none;
+  stroke: rgba(244, 242, 234, 0.9);
+  stroke-width: 2.3;
+  stroke-linecap: round;
+}
+
+.boundary-arrow-path {
+  opacity: 0.88;
+}
+
+.boundary-arrow-active {
+  opacity: 0;
+}
+
 .measure-line {
   stroke: rgba(170, 205, 245, 0.94);
   stroke-width: 1.95;

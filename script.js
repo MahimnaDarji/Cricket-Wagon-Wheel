@@ -23,6 +23,7 @@ const signupPasswordError = document.getElementById("signup-password-error");
 const fieldStage = document.querySelector(".field-stage");
 const pitchStrip = document.querySelector(".pitch-strip");
 const outerFieldRing = document.querySelector(".outer-field-ring");
+const strikerCrease = document.querySelector(".crease.top");
 
 const AUTH_BACKEND_ORIGIN =
   window.location.origin === "http://localhost:5000"
@@ -411,16 +412,21 @@ function getReplayGeometry() {
   const stageRect = fieldStage.getBoundingClientRect();
   const pitchRect = pitchStrip.getBoundingClientRect();
   const ringRect = outerFieldRing.getBoundingClientRect();
+  const creaseRect = strikerCrease?.getBoundingClientRect();
 
-  // Fixed batting contact point: centered on pitch and just below top crease.
-  const centerX = pitchRect.left + pitchRect.width / 2 - stageRect.left;
-  const centerY = pitchRect.top + pitchRect.height * 0.18 - stageRect.top;
+  const startX = creaseRect
+    ? creaseRect.left + creaseRect.width / 2 - stageRect.left
+    : pitchRect.left + pitchRect.width / 2 - stageRect.left;
+
+  const startY = creaseRect
+    ? creaseRect.top + creaseRect.height / 2 - stageRect.top
+    : pitchRect.top + pitchRect.height * 0.14 - stageRect.top;
 
   return {
     width: stageRect.width,
     height: stageRect.height,
-    centerX,
-    centerY,
+    startX,
+    startY,
     ringCenterX: ringRect.left + ringRect.width / 2 - stageRect.left,
     ringCenterY: ringRect.top + ringRect.height / 2 - stageRect.top,
     ringRadiusX: ringRect.width / 2,
@@ -440,39 +446,60 @@ function normalizeDistance(distance) {
   return Math.min(Math.max(distance, 0), 1);
 }
 
-function getBoundaryDistance(dx, dy, radiusX, radiusY) {
-  const ratio = (dx * dx) / (radiusX * radiusX) + (dy * dy) / (radiusY * radiusY);
-  return 1 / Math.sqrt(ratio);
+function getBoundaryIntersectionDistance(start, direction, geometry) {
+  const offsetX = start.x - geometry.ringCenterX;
+  const offsetY = start.y - geometry.ringCenterY;
+
+  const a =
+    (direction.x * direction.x) / (geometry.ringRadiusX * geometry.ringRadiusX) +
+    (direction.y * direction.y) / (geometry.ringRadiusY * geometry.ringRadiusY);
+  const b =
+    (2 * offsetX * direction.x) / (geometry.ringRadiusX * geometry.ringRadiusX) +
+    (2 * offsetY * direction.y) / (geometry.ringRadiusY * geometry.ringRadiusY);
+  const c =
+    (offsetX * offsetX) / (geometry.ringRadiusX * geometry.ringRadiusX) +
+    (offsetY * offsetY) / (geometry.ringRadiusY * geometry.ringRadiusY) -
+    1;
+
+  const discriminant = b * b - 4 * a * c;
+  if (!Number.isFinite(discriminant) || discriminant < 0) {
+    return 0;
+  }
+
+  const sqrtDiscriminant = Math.sqrt(discriminant);
+  const t1 = (-b - sqrtDiscriminant) / (2 * a);
+  const t2 = (-b + sqrtDiscriminant) / (2 * a);
+  const candidates = [t1, t2].filter((value) => Number.isFinite(value) && value > 0);
+
+  if (candidates.length === 0) {
+    return 0;
+  }
+
+  return Math.max(...candidates);
 }
 
 function buildShotPath(geometry, shot) {
   const angleRadians = (shot.angle * Math.PI) / 180;
-  const directionX = Math.cos(angleRadians);
-  const directionY = Math.sin(angleRadians);
-  const maxReach = getBoundaryDistance(directionX, directionY, geometry.ringRadiusX, geometry.ringRadiusY);
-  const distanceFactor = normalizeDistance(shot.distance);
-  const travel = maxReach;
+  const direction = {
+    x: Math.cos(angleRadians),
+    y: Math.sin(angleRadians),
+  };
 
   const start = {
-    x: geometry.centerX,
-    y: geometry.centerY,
+    x: geometry.startX,
+    y: geometry.startY,
   };
+
+  const travel = getBoundaryIntersectionDistance(start, direction, geometry);
 
   const end = {
-    x: geometry.ringCenterX + directionX * travel,
-    y: geometry.ringCenterY + directionY * travel,
+    x: start.x + direction.x * travel,
+    y: start.y + direction.y * travel,
   };
 
-  const midX = (start.x + end.x) / 2;
-  const midY = (start.y + end.y) / 2;
-  const perpendicularX = -directionY;
-  const perpendicularY = directionX;
-  const curveStrength = Number.isFinite(shot.curve) ? shot.curve : 0.08;
-  const curveShift = maxReach * curveStrength * (0.7 + distanceFactor * 0.3);
-
   const control = {
-    x: midX + perpendicularX * curveShift,
-    y: midY + perpendicularY * curveShift,
+    x: (start.x + end.x) / 2,
+    y: (start.y + end.y) / 2,
   };
 
   return { start, control, end };
@@ -550,13 +577,14 @@ async function replayShotsSequentially(pathLayer, shots, pauseMs, targetCycleMs)
 }
 
 function setupShotReplay() {
-  const shotQueue = [
-    { angle: -25, distance: 1, curve: 0.04 },
-    { angle: 12, distance: 0.92, curve: -0.05 },
-    { angle: 48, distance: 0.97, curve: 0.09 },
-    { angle: 110, distance: 0.9, curve: -0.06 },
-    { angle: 156, distance: 1, curve: 0.05 },
-  ];
+  const sectorCount = 8;
+  const sectorAngle = 360 / sectorCount;
+  const firstSectorStart = -180;
+  const shotQueue = Array.from({ length: sectorCount }, (_, index) => ({
+    angle: firstSectorStart + sectorAngle * index + sectorAngle / 2,
+    distance: 1,
+    curve: 0,
+  }));
 
   const pathLayer = createShotLayer(fieldStage);
   const pauseBetweenShots = 420;
