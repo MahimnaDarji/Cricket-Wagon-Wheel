@@ -12,18 +12,19 @@ const liveStadium = document.getElementById("live-stadium");
 const liveBoundaries = document.getElementById("live-boundaries");
 
 const groundStage = document.querySelector(".ground-stage");
+const groundCircle = document.querySelector(".ground-circle");
 const pitchStrip = document.querySelector(".pitch-strip");
 const strikerCrease = document.querySelector(".crease.top");
 
 const boundaryFieldConfig = [
-  { name: "Fine Leg", angle: -135, inputId: "custom-fine-leg" },
-  { name: "Straight (Long Off / Long On)", angle: -90, inputId: "custom-straight" },
-  { name: "Extra Cover", angle: -45, inputId: "custom-extra-cover" },
-  { name: "Cover / Point", angle: 0, inputId: "custom-cover-point" },
-  { name: "Deep Point / Third Man", angle: 45, inputId: "custom-deep-point" },
+  { name: "Third Man", angle: -135, inputId: "custom-fine-leg" },
+  { name: "Long Stop", angle: -90, inputId: "custom-straight" },
+  { name: "Fine Leg", angle: -45, inputId: "custom-extra-cover" },
+  { name: "Deep Square Leg", angle: 0, inputId: "custom-cover-point" },
+  { name: "Cow Corner", angle: 45, inputId: "custom-deep-point" },
   { name: "Straight Down Ground", angle: 90, inputId: "custom-straight-down" },
-  { name: "Deep Mid-Wicket", angle: 135, inputId: "custom-deep-midwicket" },
-  { name: "Square Leg", angle: 180, inputId: "custom-square-leg" },
+  { name: "Extra Cover", angle: 135, inputId: "custom-deep-midwicket" },
+  { name: "Deep Point", angle: 180, inputId: "custom-square-leg" },
 ];
 
 const presets = {
@@ -192,21 +193,21 @@ function createArrowLayer(stage) {
 }
 
 function getGroundGeometry() {
-  const stageRect = groundStage.getBoundingClientRect();
+  const circleRect = groundCircle.getBoundingClientRect();
   const creaseRect = strikerCrease?.getBoundingClientRect();
   const pitchRect = pitchStrip.getBoundingClientRect();
 
   const startX = creaseRect
-    ? creaseRect.left + creaseRect.width / 2 - stageRect.left
-    : pitchRect.left + pitchRect.width / 2 - stageRect.left;
+    ? creaseRect.left + creaseRect.width / 2 - circleRect.left
+    : pitchRect.left + pitchRect.width / 2 - circleRect.left;
   const startY = creaseRect
-    ? creaseRect.top + creaseRect.height / 2 - stageRect.top
-    : pitchRect.top + pitchRect.height * 0.14 - stageRect.top;
+    ? creaseRect.top + creaseRect.height / 2 - circleRect.top
+    : pitchRect.top + pitchRect.height * 0.14 - circleRect.top;
 
   return {
-    centerX: stageRect.width / 2,
-    centerY: stageRect.height / 2,
-    radius: Math.min(stageRect.width, stageRect.height) / 2,
+    centerX: circleRect.width / 2,
+    centerY: circleRect.height / 2,
+    radius: Math.min(circleRect.width, circleRect.height) / 2,
     start: {
       x: startX,
       y: startY,
@@ -387,11 +388,11 @@ function clearRenderedArrows() {
 }
 
 function setupBoundaryReplay() {
-  if (!groundStage || !pitchStrip || !strikerCrease) {
+  if (!groundCircle || !pitchStrip || !strikerCrease) {
     return;
   }
 
-  boundaryReplayLayer = createArrowLayer(groundStage);
+  boundaryReplayLayer = createArrowLayer(groundCircle);
   rerenderBoundaryReplay();
 }
 

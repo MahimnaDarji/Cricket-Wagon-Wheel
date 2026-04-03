@@ -50,28 +50,28 @@
         <section id="custom-controls" class="setup-block is-hidden" aria-label="Custom boundary inputs">
           <p class="setup-label">Custom Boundary Dimensions</p>
 
-          <label class="setup-field-label" for="custom-fine-leg">Fine Leg (m)</label>
+          <label class="setup-field-label" for="custom-fine-leg">Third Man (m)</label>
           <input id="custom-fine-leg" class="setup-input" type="number" min="55" max="90" />
 
-          <label class="setup-field-label" for="custom-straight">Straight (Long Off / Long On) (m)</label>
+          <label class="setup-field-label" for="custom-straight">Long Stop (m)</label>
           <input id="custom-straight" class="setup-input" type="number" min="55" max="90" />
 
-          <label class="setup-field-label" for="custom-extra-cover">Extra Cover (m)</label>
+          <label class="setup-field-label" for="custom-extra-cover">Fine Leg (m)</label>
           <input id="custom-extra-cover" class="setup-input" type="number" min="55" max="90" />
 
-          <label class="setup-field-label" for="custom-cover-point">Cover / Point (m)</label>
+          <label class="setup-field-label" for="custom-cover-point">Deep Square Leg (m)</label>
           <input id="custom-cover-point" class="setup-input" type="number" min="55" max="90" />
 
-          <label class="setup-field-label" for="custom-deep-point">Deep Point / Third Man (m)</label>
+          <label class="setup-field-label" for="custom-deep-point">Cow Corner (m)</label>
           <input id="custom-deep-point" class="setup-input" type="number" min="55" max="90" />
 
           <label class="setup-field-label" for="custom-straight-down">Straight Down Ground (m)</label>
           <input id="custom-straight-down" class="setup-input" type="number" min="55" max="90" />
 
-          <label class="setup-field-label" for="custom-deep-midwicket">Deep Mid-Wicket (m)</label>
+          <label class="setup-field-label" for="custom-deep-midwicket">Extra Cover (m)</label>
           <input id="custom-deep-midwicket" class="setup-input" type="number" min="55" max="90" />
 
-          <label class="setup-field-label" for="custom-square-leg">Square Leg (m)</label>
+          <label class="setup-field-label" for="custom-square-leg">Deep Point (m)</label>
           <input id="custom-square-leg" class="setup-input" type="number" min="55" max="90" />
 
           <button id="apply-custom-boundaries" class="mode-btn active" type="button">Apply</button>
@@ -81,14 +81,16 @@
           <p class="setup-label">Live Ground Update</p>
           <p id="live-mode" class="live-line">Mode: Preset</p>
           <p id="live-stadium" class="live-line">Stadium: Melbourne Cricket Ground</p>
-          <p id="live-boundaries" class="live-line">Fine Leg: 69M<br>Straight (Long Off / Long On): 83M<br>Extra Cover: 72M<br>Cover / Point: 70M<br>Deep Point / Third Man: 78M<br>Straight Down Ground: 84M<br>Deep Mid-Wicket: 80M<br>Square Leg: 74M</p>
+          <p id="live-boundaries" class="live-line">Third Man: 69M<br>Long Stop: 83M<br>Fine Leg: 72M<br>Deep Square Leg: 70M<br>Cow Corner: 78M<br>Straight Down Ground: 84M<br>Extra Cover: 80M<br>Deep Point: 74M</p>
         </section>
       </aside>
 
       <section class="ground-stage" aria-label="Interactive cricket ground visualization">
-        <div class="pitch-strip">
-          <span class="crease top"></span>
-          <span class="crease bottom"></span>
+        <div class="ground-circle">
+          <div class="pitch-strip">
+            <span class="crease top"></span>
+            <span class="crease bottom"></span>
+          </div>
         </div>
       </section>
     </main>
