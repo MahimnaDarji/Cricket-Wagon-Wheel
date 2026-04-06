@@ -323,8 +323,30 @@ function setupSignupValidation() {
 
 function setupGoogleButtons() {
   document.querySelectorAll("[data-google-action]").forEach((button) => {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
       const action = button.getAttribute("data-google-action") === "signup" ? "signup" : "login";
+      const targetFeedback = action === "signup" ? signupFeedback : loginFeedback;
+      clearFeedback(targetFeedback);
+
+      try {
+        const healthResponse = await fetch(toAuthUrl("/health"), {
+          method: "GET",
+          credentials: "include",
+        });
+        const health = await healthResponse.json();
+
+        if (!healthResponse.ok || !health.dbReady) {
+          setFeedback(targetFeedback, "error", [
+            "Google sign-in is unavailable right now because the database is not connected.",
+            "Start MongoDB and retry.",
+          ]);
+          return;
+        }
+      } catch (_error) {
+        setFeedback(targetFeedback, "error", ["Unable to verify server readiness. Please try again."]);
+        return;
+      }
+
       window.location.href = toAuthUrl(`/auth/google?mode=${action}`);
     });
   });

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cricket Wagon Wheel | Player Setup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="player-setup.css" />
+</head>
+<body>
+  <div class="dashboard-shell">
+    <header class="dash-header">
+      <div class="brand-wrap">
+        <p class="brand-eyebrow">Cricket Analytics Platform</p>
+        <h1>Wagon Wheel Control Desk</h1>
+      </div>
+      <div class="profile-wrap" aria-label="User profile and logout area">
+        <div class="profile-chip">
+          <span class="profile-label">Profile</span>
+          <strong>Analyst</strong>
+        </div>
+        <a class="logout-btn" href="index.html">Logout</a>
+      </div>
+    </header>
+
+    <main class="player-layout" aria-label="Player setup workspace">
+      <section class="panel player-panel" aria-label="Player details editor">
+        <h2>Player Setup</h2>
+
+        <section class="setup-block" aria-label="Mode selection">
+          <p class="setup-label">Setup Mode</p>
+          <div class="mode-toggle" role="tablist" aria-label="Individual or Team mode">
+            <button id="mode-individual" class="mode-btn active" type="button" role="tab" aria-selected="true">Individual Mode</button>
+            <button id="mode-team" class="mode-btn" type="button" role="tab" aria-selected="false">Team Mode</button>
+          </div>
+        </section>
+
+        <section class="setup-block player-card" aria-label="Current player form card">
+          <p id="player-card-title" class="setup-label">Player 1 Details</p>
+
+          <div class="avatar-upload" aria-label="Avatar uploader">
+            <img id="avatar-preview" class="avatar-preview" alt="Player avatar preview" />
+            <div class="avatar-actions">
+              <label class="mode-btn avatar-upload-btn" for="player-avatar">Upload Profile Image</label>
+              <input id="player-avatar" type="file" accept="image/*" class="avatar-input" />
+              <button id="clear-avatar" class="mode-btn avatar-clear-btn" type="button">Reset Avatar</button>
+            </div>
+          </div>
+
+          <label class="setup-field-label" for="player-name">Player Name</label>
+          <input id="player-name" class="setup-input" type="text" placeholder="Enter player name" maxlength="40" />
+
+          <p class="setup-field-label">Batting Style</p>
+          <div class="batting-toggle" role="radiogroup" aria-label="Batting style selection">
+            <button id="batting-right" class="mode-btn active" type="button" role="radio" aria-checked="true">Right-Handed Batter</button>
+            <button id="batting-left" class="mode-btn" type="button" role="radio" aria-checked="false">Left-Handed Batter</button>
+          </div>
+
+          <div class="player-card-actions">
+            <button id="remove-player" class="mode-btn danger-btn" type="button">Remove Selected Player</button>
+          </div>
+
+          <p id="player-form-note" class="live-line">Individual mode is active.</p>
+        </section>
+
+        <section class="setup-block" aria-label="Confirm player setup">
+          <button id="confirm-continue" class="mode-btn active confirm-btn" type="button" disabled>Confirm &amp; Continue</button>
+        </section>
+      </section>
+
+      <section class="panel player-panel" aria-label="Player list and selector">
+        <h2>Player Selector</h2>
+
+        <section class="setup-block" aria-label="Team controls">
+          <div class="roster-head">
+            <p id="roster-count" class="setup-label">Players: 1 / 1</p>
+            <button id="add-player" class="mode-btn active" type="button">Add Player</button>
+          </div>
+          <p id="roster-note" class="live-line">Switch to Team Mode to manage up to 11 players.</p>
+        </section>
+
+        <section class="setup-block roster-grid-wrap" aria-label="Player list grid">
+          <div id="player-list" class="player-list" role="listbox" aria-label="Select a player"></div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script src="player-setup.js" defer></script>
+</body>
+</html>

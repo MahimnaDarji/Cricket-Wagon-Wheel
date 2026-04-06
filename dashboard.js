@@ -46,6 +46,21 @@ let activeBoundaryScale = activeBoundaryValues.map(() => 1);
 let boundaryReplayLayer = null;
 let boundaryReplayRunId = 0;
 
+function saveGroundSetup() {
+  const payload = {
+    mode: activeMode,
+    stadiumName: currentStadiumName,
+    boundaries: boundaryFieldConfig.map((field, index) => ({
+      name: field.name,
+      value: activeBoundaryValues[index],
+      label: activeBoundaryLabels[index] || "",
+    })),
+    savedAt: new Date().toISOString(),
+  };
+
+  localStorage.setItem("groundSetup", JSON.stringify(payload));
+}
+
 function clampBoundary(value) {
   if (!Number.isFinite(value)) {
     return NaN;
@@ -136,6 +151,7 @@ function updateLiveArea() {
     return `${field.name}: ${activeBoundaryLabels[index] || ""}`;
   });
   liveBoundaries.innerHTML = lines.join("<br>");
+  saveGroundSetup();
 }
 
 function refreshVisibleBoundaryLabels() {

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cricket Wagon Wheel | Setup Review</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="review.css" />
+</head>
+<body>
+  <div class="dashboard-shell">
+    <header class="dash-header">
+      <div class="brand-wrap">
+        <p class="brand-eyebrow">Cricket Analytics Platform</p>
+        <h1>Wagon Wheel Control Desk</h1>
+      </div>
+      <div class="profile-wrap" aria-label="User profile and logout area">
+        <div class="profile-chip">
+          <span class="profile-label">Profile</span>
+          <strong>Analyst</strong>
+        </div>
+        <a class="logout-btn" href="index.html">Logout</a>
+      </div>
+    </header>
+
+    <main class="dash-layout" aria-label="Player and ground review workspace">
+      <aside class="panel panel-left" aria-label="Review details panel">
+        <h2>Review Setup</h2>
+
+        <section class="setup-block">
+          <p id="mode-line" class="setup-label">Mode: Individual</p>
+          <p id="player-count-line" class="live-line">Players: 1</p>
+        </section>
+
+        <section class="setup-block player-summary" aria-label="Selected player details">
+          <p class="setup-label">Selected Player</p>
+          <div class="player-header">
+            <img id="selected-avatar" class="selected-avatar" alt="Selected player profile" />
+            <div class="player-meta">
+              <p id="selected-name" class="player-name">Player</p>
+              <p id="selected-style" class="player-style">Right-Handed Batter</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="setup-block" aria-label="Ground details">
+          <p class="setup-label">Selected Ground</p>
+          <p id="stadium-name" class="ground-name">Melbourne Cricket Ground</p>
+          <p id="ground-mode" class="live-line">Ground Mode: Preset</p>
+        </section>
+
+        <section class="setup-block" aria-label="Boundary dimensions list">
+          <p class="setup-label">Boundary Dimensions</p>
+          <div id="dimension-list" class="dimension-list"></div>
+        </section>
+
+        <section id="team-selector-block" class="setup-block" aria-label="Team player selector">
+          <p class="setup-label">Team Player Selector</p>
+          <div id="player-list" class="player-list" role="listbox" aria-label="Select saved player"></div>
+        </section>
+      </aside>
+
+      <section class="ground-stage" aria-label="Ground visualization with dimensions">
+        <div class="ground-circle" aria-hidden="true">
+          <div class="pitch-strip">
+            <span class="crease top"></span>
+            <span class="crease bottom"></span>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="review.js" defer></script>
+</body>
+</html>
