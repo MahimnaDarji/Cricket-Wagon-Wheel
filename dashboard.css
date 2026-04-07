@@ -48,6 +48,7 @@ body {
   gap: 0.9rem;
 }
 
+
 .brand-eyebrow {
   margin: 0;
   font-size: 0.74rem;
@@ -398,6 +399,32 @@ body {
 
   .panel-left {
     height: auto;
+  }
+
+  .panel-left {
+    font-size: calc(1rem - 1px);
+  }
+
+  .panel-left .setup-block {
+    padding: calc(0.56rem - 1px) calc(0.6rem - 1px);
+    gap: calc(0.35rem - 1px);
+  }
+
+  .panel-left .setup-label {
+    font-size: calc(0.78rem - 1px);
+  }
+
+  .panel-left .setup-field-label {
+    font-size: calc(0.84rem - 1px);
+  }
+
+  .panel-left .live-line {
+    font-size: calc(0.94rem - 1px);
+  }
+
+  .panel-left .mode-btn,
+  .panel-left .setup-input {
+    min-height: 37px;
   }
 
   .ground-stage {

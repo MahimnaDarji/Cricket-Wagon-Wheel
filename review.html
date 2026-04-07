@@ -16,11 +16,7 @@
         <p class="brand-eyebrow">Cricket Analytics Platform</p>
         <h1>Wagon Wheel Control Desk</h1>
       </div>
-      <div class="profile-wrap" aria-label="User profile and logout area">
-        <div class="profile-chip">
-          <span class="profile-label">Profile</span>
-          <strong>Analyst</strong>
-        </div>
+      <div class="profile-wrap" aria-label="Logout area">
         <a class="logout-btn" href="index.html">Logout</a>
       </div>
     </header>
@@ -28,11 +24,6 @@
     <main class="dash-layout" aria-label="Player and ground review workspace">
       <aside class="panel panel-left" aria-label="Review details panel">
         <h2>Review Setup</h2>
-
-        <section class="setup-block">
-          <p id="mode-line" class="setup-label">Mode: Individual</p>
-          <p id="player-count-line" class="live-line">Players: 1</p>
-        </section>
 
         <section class="setup-block player-summary" aria-label="Selected player details">
           <p class="setup-label">Selected Player</p>
@@ -45,24 +36,57 @@
           </div>
         </section>
 
+        <section id="player-selector-block" class="setup-block is-hidden" aria-label="Team player selector">
+          <label class="setup-label" for="player-selector-dropdown">Select Player</label>
+          <select id="player-selector-dropdown" class="player-select" aria-label="Select team player"></select>
+        </section>
+
         <section class="setup-block" aria-label="Ground details">
           <p class="setup-label">Selected Ground</p>
           <p id="stadium-name" class="ground-name">Melbourne Cricket Ground</p>
           <p id="ground-mode" class="live-line">Ground Mode: Preset</p>
         </section>
 
-        <section class="setup-block" aria-label="Boundary dimensions list">
-          <p class="setup-label">Boundary Dimensions</p>
-          <div id="dimension-list" class="dimension-list"></div>
+        <section class="setup-block" aria-label="Make your own wagon wheel controls">
+          <p class="setup-label">Make Your Own Wagon Wheel</p>
+          <button id="wagon-wheel-toggle" type="button" class="wagon-wheel-toggle" aria-pressed="false">
+            Select Runs
+          </button>
+          <p id="run-selection-status" class="live-line run-selection-status">Neutral: Run selection is not enabled yet.</p>
+          <div id="run-options-panel" class="run-options-panel is-hidden" aria-label="Run options">
+            <div id="run-chip-list" class="run-chip-list" role="radiogroup" aria-label="Choose runs from 1 to 6"></div>
+            <div class="wagon-wheel-actions" aria-label="Innings actions">
+              <button id="next-ball-btn" type="button" class="wagon-wheel-action-btn">Next Ball</button>
+              <button id="complete-innings-btn" type="button" class="wagon-wheel-action-btn complete">Complete Innings</button>
+            </div>
+          </div>
         </section>
 
-        <section id="team-selector-block" class="setup-block" aria-label="Team player selector">
-          <p class="setup-label">Team Player Selector</p>
-          <div id="player-list" class="player-list" role="listbox" aria-label="Select saved player"></div>
-        </section>
+        <button type="button" class="panel-back-btn" onclick="window.history.back()">Back</button>
       </aside>
 
       <section class="ground-stage" aria-label="Ground visualization with dimensions">
+        <div class="ground-summary-anchor" aria-hidden="false">
+          <article class="player-summary-card" aria-label="Current player innings summary">
+            <img id="summary-avatar" class="summary-avatar" alt="Current player profile" />
+            <div class="summary-meta">
+              <p id="summary-name" class="summary-name">Player</p>
+              <div class="summary-stats" aria-label="Current player runs and balls">
+                <span id="summary-runs" class="summary-pill">0 Runs</span>
+                <span id="summary-balls" class="summary-pill">0 Balls</span>
+              </div>
+            </div>
+          </article>
+          <article id="team-summary-card" class="player-summary-card team-summary-card is-hidden" aria-label="Team innings summary">
+            <div class="summary-meta">
+              <p class="summary-name">Team Summary</p>
+              <div class="summary-stats" aria-label="Team runs and balls">
+                <span id="team-summary-runs" class="summary-pill">0 Runs</span>
+                <span id="team-summary-balls" class="summary-pill">0 Balls</span>
+              </div>
+            </div>
+          </article>
+        </div>
         <div class="ground-circle" aria-hidden="true">
           <div class="pitch-strip">
             <span class="crease top"></span>
@@ -71,6 +95,17 @@
         </div>
       </section>
     </main>
+  </div>
+
+  <div id="innings-confirm-modal" class="modal-backdrop is-hidden" role="dialog" aria-modal="true" aria-labelledby="innings-confirm-title">
+    <div class="confirm-modal">
+      <h3 id="innings-confirm-title">Complete Innings</h3>
+      <p id="innings-confirm-message" class="confirm-message">Are you sure you want to complete the innings?</p>
+      <div class="confirm-actions">
+        <button id="confirm-innings-no" type="button" class="wagon-wheel-action-btn">No</button>
+        <button id="confirm-innings-yes" type="button" class="wagon-wheel-action-btn complete">Yes</button>
+      </div>
+    </div>
   </div>
 
   <script src="review.js" defer></script>
