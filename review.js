@@ -18,6 +18,9 @@ const nextBallButton = document.getElementById("next-ball-btn");
 const undoShotButton = document.getElementById("undo-shot-btn");
 const clearShotsButton = document.getElementById("clear-shots-btn");
 const completeInningsButton = document.getElementById("complete-innings-btn");
+const downloadExportBlock = document.getElementById("download-export-block");
+const downloadImageButton = document.getElementById("download-image-btn");
+const returnDashboardButton = document.getElementById("return-dashboard-btn");
 const inningsConfirmModal = document.getElementById("innings-confirm-modal");
 const inningsConfirmMessage = document.getElementById("innings-confirm-message");
 const confirmInningsNoButton = document.getElementById("confirm-innings-no");
@@ -111,6 +114,7 @@ let boundaryReplayLayer = null;
 let boundaryReplayRunId = 0;
 let shotArrowLayer = null;
 let lastShotClickSignature = null;
+let exportRootNode = null;
 
 function safeParse(jsonValue) {
   try {
@@ -578,7 +582,119 @@ function completeInningsAndContinue() {
   }
 
   saveInningsState();
-  window.location.href = "dashboard.html";
+  if (downloadExportBlock) {
+    downloadExportBlock.classList.remove("is-hidden");
+  }
+}
+
+function sanitizeFileName(value) {
+  const trimmed = String(value || "player").trim().toLowerCase();
+  const safe = trimmed.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  return safe || "player";
+}
+
+function removeExportRootNode() {
+  if (!exportRootNode) {
+    return;
+  }
+
+  exportRootNode.remove();
+  exportRootNode = null;
+}
+
+function createExportContainer() {
+  removeExportRootNode();
+
+  const player = getSelectedPlayer();
+  const playerId = player?.id || "";
+  const playerShots = getPlayerShots(playerId);
+  const totalRuns = playerShots.reduce((sum, shot) => sum + (Number(shot.runValue) || 0), 0);
+  const totalBalls = playerShots.length;
+
+  const root = document.createElement("div");
+  root.className = "export-canvas-root";
+
+  const header = document.createElement("div");
+  header.className = "export-header";
+
+  const avatar = document.createElement("img");
+  avatar.className = "export-avatar";
+  avatar.src = getAvatarSource(player);
+  avatar.alt = "Player avatar";
+
+  const headerMeta = document.createElement("div");
+  const name = document.createElement("p");
+  name.className = "export-player-name";
+  name.textContent = player?.name || "Player";
+
+  const style = document.createElement("p");
+  style.className = "export-player-style";
+  style.textContent = getStyleLabel(player?.battingStyle || "right");
+
+  headerMeta.appendChild(name);
+  headerMeta.appendChild(style);
+  header.appendChild(avatar);
+  header.appendChild(headerMeta);
+
+  const groundWrap = document.createElement("div");
+  groundWrap.className = "export-ground-wrap";
+  const groundClone = groundCircle.cloneNode(true);
+  groundWrap.appendChild(groundClone);
+
+  const legend = document.createElement("div");
+  legend.className = "export-legend";
+
+  RUN_VALUES.forEach((runValue) => {
+    const item = document.createElement("div");
+    item.className = "export-legend-item";
+
+    const swatch = document.createElement("span");
+    swatch.className = "export-legend-swatch";
+    swatch.style.backgroundColor =
+      state.wagonWheel.runColors[runValue] || RUN_COLOR_MAP[runValue] || "#f4f2ea";
+
+    const label = document.createElement("span");
+    label.className = "export-legend-label";
+    label.textContent = runValue === 1 ? "1 Run" : `${runValue} Runs`;
+
+    item.appendChild(swatch);
+    item.appendChild(label);
+    legend.appendChild(item);
+  });
+
+  const summary = document.createElement("p");
+  summary.className = "export-summary";
+  summary.textContent = `${totalRuns} Run${totalRuns === 1 ? "" : "s"} | ${totalBalls} Ball${totalBalls === 1 ? "" : "s"}`;
+
+  root.appendChild(header);
+  root.appendChild(groundWrap);
+  root.appendChild(legend);
+  root.appendChild(summary);
+
+  document.body.appendChild(root);
+  exportRootNode = root;
+  return root;
+}
+
+async function downloadWagonWheelImage() {
+  if (typeof window.html2canvas !== "function") {
+    return;
+  }
+
+  const exportContainer = createExportContainer();
+  const canvas = await window.html2canvas(exportContainer, {
+    scale: 3,
+    useCORS: true,
+    backgroundColor: null,
+  });
+
+  const selected = getSelectedPlayer();
+  const safePlayerName = sanitizeFileName(selected?.name || "player");
+  const link = document.createElement("a");
+  link.href = canvas.toDataURL("image/png");
+  link.download = `${safePlayerName}_wagon_wheel.png`;
+  link.click();
+  removeExportRootNode();
 }
 
 function setupRunSelection() {
@@ -622,6 +738,18 @@ function setupRunSelection() {
   if (clearShotsButton) {
     clearShotsButton.addEventListener("click", () => {
       clearAllShots();
+    });
+  }
+
+  if (downloadImageButton) {
+    downloadImageButton.addEventListener("click", async () => {
+      await downloadWagonWheelImage();
+    });
+  }
+
+  if (returnDashboardButton) {
+    returnDashboardButton.addEventListener("click", () => {
+      window.location.href = "dashboard.html";
     });
   }
 

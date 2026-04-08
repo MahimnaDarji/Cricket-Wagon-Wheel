@@ -1,7 +1,7 @@
 {
-  "name": "cricket-wagon-wheel-auth",
+  "name": "creasevision-auth",
   "version": "1.0.0",
-  "description": "Cricket wagon wheel UI with Node.js, Express, and MongoDB authentication",
+  "description": "CreaseVision UI with Node.js, Express, and MongoDB authentication",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

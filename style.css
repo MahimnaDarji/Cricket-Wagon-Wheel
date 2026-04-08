@@ -218,7 +218,7 @@ body {
 .rig-head h2 {
   margin: 0;
   font-family: "Oswald", sans-serif;
-  text-transform: uppercase;
+  text-transform: none;
   letter-spacing: 0.035em;
   font-size: clamp(1.9rem, 4.5vw, 2.35rem);
   line-height: 0.92;

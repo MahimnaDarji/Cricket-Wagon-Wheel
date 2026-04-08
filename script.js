@@ -11,11 +11,9 @@ const tabs = {
 
 const loginForm = document.getElementById("login-form");
 const signupForm = document.getElementById("signup-form");
-const guestButton = document.getElementById("guest-btn");
 
 const loginFeedback = document.getElementById("login-feedback");
 const signupFeedback = document.getElementById("signup-feedback");
-const guestFeedback = document.getElementById("guest-feedback");
 const signupEmailInput = document.getElementById("signup-email");
 const signupPasswordInput = document.getElementById("signup-password");
 const signupEmailError = document.getElementById("signup-email-error");
@@ -509,19 +507,6 @@ async function setupOAuthResultFeedback() {
   window.history.replaceState({}, document.title, window.location.pathname);
 }
 
-function setupGuestAction() {
-  guestButton.addEventListener("click", () => {
-    clearFeedback(guestFeedback);
-    setFeedback(guestFeedback, "success", ["Guest mode enabled. Opening read-only dashboards..."]);
-    if (STATIC_AUTH_MODE) {
-      setLocalSessionUser({ name: "Guest User", email: "", isGuest: true });
-      window.setTimeout(() => {
-        window.location.href = toAppUrl("/dashboard.html");
-      }, 300);
-    }
-  });
-}
-
 function wait(ms) {
   return new Promise((resolve) => {
     window.setTimeout(resolve, ms);
@@ -749,6 +734,5 @@ setupLoginValidation();
 setupSignupValidation();
 setupSignupRealtimeValidation();
 setupGoogleButtons();
-setupGuestAction();
 setupOAuthResultFeedback();
 setupShotReplay();

@@ -1,6 +1,6 @@
-# Cricket-Wagon-Wheel
+# CreaseVision
 
-Cricket-themed authentication UI with wagon wheel shot animation and secure MongoDB-backed signup/login.
+CreaseVision is a cricket-themed authentication UI with wagon wheel shot animation and secure MongoDB-backed signup/login.
 
 ## Tech Stack
 

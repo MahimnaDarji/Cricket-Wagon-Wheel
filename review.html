@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cricket Wagon Wheel | Setup Review</title>
+  <title>CreaseVision | Wagon Wheel Review</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
@@ -13,8 +13,8 @@
   <div class="dashboard-shell">
     <header class="dash-header">
       <div class="brand-wrap">
-        <p class="brand-eyebrow">Cricket Analytics Platform</p>
-        <h1>Wagon Wheel Control Desk</h1>
+        <p class="brand-eyebrow">CreaseVision Platform</p>
+        <h1>CreaseVision Control Desk</h1>
       </div>
       <div class="profile-wrap" aria-label="Logout area">
         <a class="logout-btn" href="index.html">Logout</a>
@@ -62,6 +62,13 @@
               <button id="complete-innings-btn" type="button" class="wagon-wheel-action-btn complete">Complete Innings</button>
             </div>
           </div>
+        </section>
+
+        <section id="download-export-block" class="setup-block is-hidden" aria-label="Download wagon wheel image">
+          <p class="setup-label">Export Wagon Wheel</p>
+          <p class="live-line">Innings completed. Download a clean wagon wheel image.</p>
+          <button id="download-image-btn" type="button" class="wagon-wheel-action-btn">Download Image</button>
+          <button id="return-dashboard-btn" type="button" class="wagon-wheel-action-btn complete">Return to Dashboard</button>
         </section>
 
         <button type="button" class="panel-back-btn" onclick="window.history.back()">Back</button>
@@ -112,6 +119,7 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
   <script src="review.js" defer></script>
 </body>
 </html>
