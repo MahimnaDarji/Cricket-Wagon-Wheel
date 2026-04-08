@@ -44,6 +44,35 @@ npm run dev
 http://localhost:5000
 ```
 
+## GitHub Pages Hosting
+
+This project can run on GitHub Pages as a static site.
+
+What works on GitHub Pages:
+
+- Dashboard, player setup, review/wagon wheel, local shot tracking, and summaries.
+- Login/Signup using browser localStorage (static fallback mode).
+- Continue as Guest flow.
+
+What does not work on GitHub Pages:
+
+- Node/Express API routes.
+- MongoDB-backed authentication.
+- Google OAuth callback flow.
+
+### Deploy Steps
+
+1. Push this repository to GitHub.
+2. In repository settings, open Pages.
+3. Set source to Deploy from a branch.
+4. Select your main branch and /(root) folder.
+5. Save and open the published URL.
+
+Notes:
+
+- Static fallback mode auto-enables on github.io and file:// hosts.
+- Use localhost:5000 if you want server + MongoDB authentication.
+
 ## API Endpoints
 
 - `POST /signup`

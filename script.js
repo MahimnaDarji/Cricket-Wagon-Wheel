@@ -25,6 +25,12 @@ const pitchStrip = document.querySelector(".pitch-strip");
 const outerFieldRing = document.querySelector(".outer-field-ring");
 const strikerCrease = document.querySelector(".crease.top");
 
+const STATIC_AUTH_MODE =
+  window.location.hostname.endsWith("github.io") ||
+  window.location.protocol === "file:";
+const LOCAL_USERS_KEY = "cww_local_users";
+const LOCAL_SESSION_KEY = "cww_session_user";
+
 const AUTH_BACKEND_ORIGIN =
   window.location.origin === "http://localhost:5000"
     ? ""
@@ -32,6 +38,66 @@ const AUTH_BACKEND_ORIGIN =
 
 function toAuthUrl(path) {
   return `${AUTH_BACKEND_ORIGIN}${path}`;
+}
+
+function toAppUrl(path) {
+  if (STATIC_AUTH_MODE) {
+    return String(path || "").replace(/^\//, "");
+  }
+
+  return toAuthUrl(path);
+}
+
+function loadLocalUsers() {
+  try {
+    const raw = localStorage.getItem(LOCAL_USERS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalUsers(users) {
+  localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(users));
+}
+
+function getLocalSessionUser() {
+  try {
+    const raw = localStorage.getItem(LOCAL_SESSION_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") {
+      return null;
+    }
+
+    return {
+      name: String(parsed.name || "User"),
+      email: String(parsed.email || ""),
+      isGuest: Boolean(parsed.isGuest),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function setLocalSessionUser(user) {
+  const payload = {
+    name: String(user?.name || "User"),
+    email: String(user?.email || ""),
+    isGuest: Boolean(user?.isGuest),
+    savedAt: new Date().toISOString(),
+  };
+
+  localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(payload));
+}
+
+function findLocalUserByEmail(email) {
+  const target = String(email || "").trim().toLowerCase();
+  return loadLocalUsers().find((user) => String(user.email || "").trim().toLowerCase() === target) || null;
 }
 
 function switchTab(target) {
@@ -224,6 +290,21 @@ function setupLoginValidation() {
 
     markFields(loginForm, []);
 
+    if (STATIC_AUTH_MODE) {
+      const user = findLocalUserByEmail(email);
+      if (!user || String(user.password || "") !== password) {
+        setFeedback(loginFeedback, "error", ["Invalid email or password."]);
+        return;
+      }
+
+      setLocalSessionUser({ name: user.name, email: user.email, isGuest: false });
+      setFeedback(loginFeedback, "success", ["Login successful."]);
+      window.setTimeout(() => {
+        window.location.href = toAppUrl("/dashboard.html");
+      }, 350);
+      return;
+    }
+
     try {
       const result = await postJson("/login", { email, password });
       if (!result.ok) {
@@ -234,7 +315,7 @@ function setupLoginValidation() {
 
       setFeedback(loginFeedback, "success", [result.data?.message || "Login successful."]);
       window.setTimeout(() => {
-        window.location.href = toAuthUrl("/dashboard.html");
+        window.location.href = toAppUrl("/dashboard.html");
       }, 350);
     } catch (_error) {
       setFeedback(loginFeedback, "error", ["Unable to connect to the server. Please try again."]);
@@ -301,6 +382,30 @@ function setupSignupValidation() {
 
     markFields(signupForm, []);
 
+    if (STATIC_AUTH_MODE) {
+      const users = loadLocalUsers();
+      const exists = users.some((user) => String(user.email || "").trim().toLowerCase() === email.toLowerCase());
+      if (exists) {
+        setFeedback(signupFeedback, "error", ["An account with this email already exists."]);
+        return;
+      }
+
+      users.push({
+        name,
+        email,
+        password,
+        createdAt: new Date().toISOString(),
+      });
+      saveLocalUsers(users);
+
+      setFeedback(signupFeedback, "success", [`Welcome, ${name}! Your account setup is complete.`]);
+      signupForm.reset();
+      clearFieldStates(signupForm);
+      setInlineFieldError(signupEmailError, []);
+      setInlineFieldError(signupPasswordError, []);
+      return;
+    }
+
     try {
       const result = await postJson("/signup", { name, email, password });
       if (!result.ok) {
@@ -328,6 +433,14 @@ function setupGoogleButtons() {
       const targetFeedback = action === "signup" ? signupFeedback : loginFeedback;
       clearFeedback(targetFeedback);
 
+      if (STATIC_AUTH_MODE) {
+        setFeedback(targetFeedback, "error", [
+          "Google sign-in is unavailable on GitHub Pages static hosting.",
+          "Use Login/Sign up forms or Continue as Guest.",
+        ]);
+        return;
+      }
+
       try {
         const healthResponse = await fetch(toAuthUrl("/health"), {
           method: "GET",
@@ -347,12 +460,16 @@ function setupGoogleButtons() {
         return;
       }
 
-      window.location.href = toAuthUrl(`/auth/google?mode=${action}`);
+      window.location.href = toAppUrl(`/auth/google?mode=${action}`);
     });
   });
 }
 
 async function checkAuthenticatedUser() {
+  if (STATIC_AUTH_MODE) {
+    return getLocalSessionUser();
+  }
+
   try {
     const response = await fetch(toAuthUrl("/auth/me"), { method: "GET", credentials: "include" });
     if (!response.ok) {
@@ -396,6 +513,12 @@ function setupGuestAction() {
   guestButton.addEventListener("click", () => {
     clearFeedback(guestFeedback);
     setFeedback(guestFeedback, "success", ["Guest mode enabled. Opening read-only dashboards..."]);
+    if (STATIC_AUTH_MODE) {
+      setLocalSessionUser({ name: "Guest User", email: "", isGuest: true });
+      window.setTimeout(() => {
+        window.location.href = toAppUrl("/dashboard.html");
+      }, 300);
+    }
   });
 }
 

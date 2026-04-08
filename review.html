@@ -57,6 +57,8 @@
             <div id="run-chip-list" class="run-chip-list" role="radiogroup" aria-label="Choose runs from 1 to 6"></div>
             <div class="wagon-wheel-actions" aria-label="Innings actions">
               <button id="next-ball-btn" type="button" class="wagon-wheel-action-btn">Next Ball</button>
+              <button id="undo-shot-btn" type="button" class="wagon-wheel-action-btn">Undo</button>
+              <button id="clear-shots-btn" type="button" class="wagon-wheel-action-btn">Clear All Shots</button>
               <button id="complete-innings-btn" type="button" class="wagon-wheel-action-btn complete">Complete Innings</button>
             </div>
           </div>
@@ -88,6 +90,8 @@
           </article>
         </div>
         <div class="ground-circle" aria-hidden="true">
+          <span id="field-side-left" class="ground-side-label side-left">Off Side</span>
+          <span id="field-side-right" class="ground-side-label side-right">Leg Side</span>
           <div class="pitch-strip">
             <span class="crease top"></span>
             <span class="crease bottom"></span>

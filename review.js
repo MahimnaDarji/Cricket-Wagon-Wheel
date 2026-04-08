@@ -15,6 +15,8 @@ const runSelectionStatus = document.getElementById("run-selection-status");
 const runOptionsPanel = document.getElementById("run-options-panel");
 const runChipList = document.getElementById("run-chip-list");
 const nextBallButton = document.getElementById("next-ball-btn");
+const undoShotButton = document.getElementById("undo-shot-btn");
+const clearShotsButton = document.getElementById("clear-shots-btn");
 const completeInningsButton = document.getElementById("complete-innings-btn");
 const inningsConfirmModal = document.getElementById("innings-confirm-modal");
 const inningsConfirmMessage = document.getElementById("innings-confirm-message");
@@ -27,19 +29,23 @@ const summaryBalls = document.getElementById("summary-balls");
 const teamSummaryCard = document.getElementById("team-summary-card");
 const teamSummaryRuns = document.getElementById("team-summary-runs");
 const teamSummaryBalls = document.getElementById("team-summary-balls");
+const fieldSideLeftLabel = document.getElementById("field-side-left");
+const fieldSideRightLabel = document.getElementById("field-side-right");
 
 const REVIEW_GROUND_OVERLAY_ENABLED = false;
+const SHOT_START_POINT = Object.freeze({ xRatio: 0.5, yRatio: 0.363 });
 const RUN_VALUES = [1, 2, 3, 4, 5, 6];
 const RUN_COLOR_MAP = {
-  1: "#3b82f6",
-  2: "#0f766e",
-  3: "#eab308",
+  1: "#1d4ed8",
+  2: "#facc15",
+  3: "#ffffff",
   4: "#f97316",
-  5: "#8b5cf6",
-  6: "#dc2626",
+  5: "#7c3aed",
+  6: "#ef4444",
 };
 
 const groundCircle = document.querySelector(".ground-circle");
+const groundStage = document.querySelector(".ground-stage");
 const pitchStrip = document.querySelector(".pitch-strip");
 const strikerCrease = document.querySelector(".crease.top");
 
@@ -88,6 +94,7 @@ const state = {
     selectedRun: null,
     runColors: { ...RUN_COLOR_MAP },
     inningsBallsByPlayer: {},
+    shotsByPlayer: {},
   },
   ground: {
     mode: "preset",
@@ -102,6 +109,8 @@ const state = {
 
 let boundaryReplayLayer = null;
 let boundaryReplayRunId = 0;
+let shotArrowLayer = null;
+let lastShotClickSignature = null;
 
 function safeParse(jsonValue) {
   try {
@@ -176,6 +185,7 @@ function loadState() {
 
     if (playerConfirmedAtMs > 0 && inningsSavedAtMs > 0 && playerConfirmedAtMs > inningsSavedAtMs) {
       state.wagonWheel.inningsBallsByPlayer = {};
+      state.wagonWheel.shotsByPlayer = {};
       return;
     }
 
@@ -223,6 +233,8 @@ function loadState() {
 
         return acc;
       }, {});
+
+      state.wagonWheel.shotsByPlayer = {};
     } else if (Array.isArray(inningsSetup.balls) && state.selectedPlayerId) {
       state.wagonWheel.inningsBallsByPlayer[state.selectedPlayerId] = inningsSetup.balls
         .map((ball, index) => {
@@ -238,6 +250,51 @@ function loadState() {
           };
         })
         .filter(Boolean);
+
+      state.wagonWheel.shotsByPlayer = {};
+    }
+
+    const maybeShotsByPlayer = inningsSetup.shotsByPlayer;
+    if (maybeShotsByPlayer && typeof maybeShotsByPlayer === "object") {
+      state.wagonWheel.shotsByPlayer = Object.entries(maybeShotsByPlayer).reduce((acc, [playerId, shots]) => {
+        if (!Array.isArray(shots)) {
+          return acc;
+        }
+
+        acc[playerId] = shots
+          .map((shot) => {
+            const runValue = Number(shot?.runValue);
+            if (!Number.isInteger(runValue)) {
+              return null;
+            }
+
+            const start = shot?.start && typeof shot.start === "object" ? shot.start : null;
+            const end = shot?.end && typeof shot.end === "object" ? shot.end : null;
+            if (!start || !end) {
+              return null;
+            }
+
+            return {
+              runValue,
+              color: String(shot?.color || state.wagonWheel.runColors[runValue] || RUN_COLOR_MAP[runValue] || "#f4f2ea"),
+              start: {
+                x: Number(start.x) || 0,
+                y: Number(start.y) || 0,
+                xRatio: Number(start.xRatio),
+                yRatio: Number(start.yRatio),
+              },
+              end: {
+                x: Number(end.x) || 0,
+                y: Number(end.y) || 0,
+                xRatio: Number(end.xRatio),
+                yRatio: Number(end.yRatio),
+              },
+            };
+          })
+          .filter(Boolean);
+
+        return acc;
+      }, {});
     }
   }
 }
@@ -259,6 +316,7 @@ function selectPlayer(playerId) {
   state.selectedPlayerId = playerId;
   renderPlayerPanel();
   renderTopRightSummaryCard();
+  renderShotArrows();
 }
 
 function renderPlayerPanel() {
@@ -274,6 +332,7 @@ function renderPlayerPanel() {
   selectedAvatar.src = getAvatarSource(player);
   selectedName.textContent = player?.name || "Player";
   selectedStyle.textContent = getStyleLabel(player?.battingStyle || "right");
+  renderFieldSideLabels(player?.battingStyle || "right");
 
   if (playerSelectorBlock) {
     playerSelectorBlock.classList.toggle("is-hidden", !inTeamMode);
@@ -297,6 +356,16 @@ function renderPlayerPanel() {
     }
     playerSelectorDropdown.appendChild(option);
   });
+}
+
+function renderFieldSideLabels(battingStyle) {
+  if (!fieldSideLeftLabel || !fieldSideRightLabel) {
+    return;
+  }
+
+  const isLeftHanded = String(battingStyle || "right").toLowerCase() === "left";
+  fieldSideLeftLabel.textContent = isLeftHanded ? "Leg Side" : "Off Side";
+  fieldSideRightLabel.textContent = isLeftHanded ? "Off Side" : "Leg Side";
 }
 
 function renderGroundDetails() {
@@ -331,6 +400,11 @@ function getPlayerBalls(playerId) {
   return Array.isArray(balls) ? balls : [];
 }
 
+function getPlayerShots(playerId) {
+  const shots = state.wagonWheel.shotsByPlayer[playerId];
+  return Array.isArray(shots) ? shots : [];
+}
+
 function renderTopRightSummaryCard() {
   if (!summaryAvatar || !summaryName || !summaryRuns || !summaryBalls) {
     return;
@@ -338,9 +412,9 @@ function renderTopRightSummaryCard() {
 
   const player = getSelectedPlayer();
   const playerId = player?.id || "";
-  const playerBalls = getPlayerBalls(playerId);
-  const totalRuns = playerBalls.reduce((sum, ball) => sum + (Number(ball.run) || 0), 0);
-  const totalBalls = playerBalls.length;
+  const playerShots = getPlayerShots(playerId);
+  const totalRuns = playerShots.reduce((sum, shot) => sum + (Number(shot.runValue) || 0), 0);
+  const totalBalls = playerShots.length;
 
   summaryAvatar.src = getAvatarSource(player);
   summaryName.textContent = player?.name || "Player";
@@ -362,9 +436,9 @@ function renderTopRightSummaryCard() {
 
   const teamTotals = state.players.reduce(
     (totals, teamPlayer) => {
-      const balls = getPlayerBalls(teamPlayer.id);
-      totals.balls += balls.length;
-      totals.runs += balls.reduce((sum, ball) => sum + (Number(ball.run) || 0), 0);
+      const shots = getPlayerShots(teamPlayer.id);
+      totals.balls += shots.length;
+      totals.runs += shots.reduce((sum, shot) => sum + (Number(shot.runValue) || 0), 0);
       return totals;
     },
     { runs: 0, balls: 0 }
@@ -432,6 +506,15 @@ function saveInningsState() {
     runColors: { ...state.wagonWheel.runColors },
     ballsByPlayer: Object.entries(state.wagonWheel.inningsBallsByPlayer).reduce((acc, [playerId, balls]) => {
       acc[playerId] = (balls || []).map((ball) => ({ ...ball }));
+      return acc;
+    }, {}),
+    shotsByPlayer: Object.entries(state.wagonWheel.shotsByPlayer).reduce((acc, [playerId, shots]) => {
+      acc[playerId] = (shots || []).map((shot) => ({
+        runValue: Number(shot.runValue) || 0,
+        color: String(shot.color || ""),
+        start: { ...shot.start },
+        end: { ...shot.end },
+      }));
       return acc;
     }, {}),
     balls: (() => {
@@ -530,6 +613,18 @@ function setupRunSelection() {
     });
   }
 
+  if (undoShotButton) {
+    undoShotButton.addEventListener("click", () => {
+      undoLastShot();
+    });
+  }
+
+  if (clearShotsButton) {
+    clearShotsButton.addEventListener("click", () => {
+      clearAllShots();
+    });
+  }
+
   if (completeInningsButton) {
     completeInningsButton.addEventListener("click", () => {
       showCompleteInningsModal();
@@ -608,6 +703,237 @@ function createArrowLayer(stage) {
   stage.appendChild(svg);
 
   return { svg, settledGroup, activePath };
+}
+
+function createShotArrowLayer(stage) {
+  const namespace = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(namespace, "svg");
+  svg.classList.add("shot-overlay");
+  svg.setAttribute("preserveAspectRatio", "none");
+  stage.appendChild(svg);
+  return svg;
+}
+
+function getFixedShotStart(groundRect) {
+  return {
+    x: groundRect.width * SHOT_START_POINT.xRatio,
+    y: groundRect.height * SHOT_START_POINT.yRatio,
+  };
+}
+
+function toNormalizedPoint(point, rect) {
+  return {
+    x: point.x,
+    y: point.y,
+    xRatio: rect.width > 0 ? point.x / rect.width : 0,
+    yRatio: rect.height > 0 ? point.y / rect.height : 0,
+  };
+}
+
+function fromNormalizedPoint(point, rect) {
+  const hasRatios = Number.isFinite(Number(point?.xRatio)) && Number.isFinite(Number(point?.yRatio));
+  if (hasRatios) {
+    return {
+      x: Number(point.xRatio) * rect.width,
+      y: Number(point.yRatio) * rect.height,
+    };
+  }
+
+  return {
+    x: Number(point?.x) || 0,
+    y: Number(point?.y) || 0,
+  };
+}
+
+function isInsideGroundCircle(point, groundRect) {
+  const centerX = groundRect.width / 2;
+  const centerY = groundRect.height / 2;
+  const radius = Math.min(groundRect.width, groundRect.height) / 2;
+  const dx = point.x - centerX;
+  const dy = point.y - centerY;
+  return dx * dx + dy * dy <= radius * radius;
+}
+
+function getBoundaryDistanceAlongDirection(start, direction, groundRect) {
+  const centerX = groundRect.width / 2;
+  const centerY = groundRect.height / 2;
+  const radius = Math.min(groundRect.width, groundRect.height) / 2;
+  const dx = start.x - centerX;
+  const dy = start.y - centerY;
+
+  const a = direction.x * direction.x + direction.y * direction.y;
+  const b = 2 * (dx * direction.x + dy * direction.y);
+  const c = dx * dx + dy * dy - radius * radius;
+  const discriminant = b * b - 4 * a * c;
+
+  if (!Number.isFinite(discriminant) || discriminant < 0) {
+    return 0;
+  }
+
+  const sqrtDiscriminant = Math.sqrt(discriminant);
+  const t1 = (-b - sqrtDiscriminant) / (2 * a);
+  const t2 = (-b + sqrtDiscriminant) / (2 * a);
+  const positive = [t1, t2].filter((value) => Number.isFinite(value) && value > 0);
+  if (positive.length === 0) {
+    return 0;
+  }
+
+  return Math.max(...positive);
+}
+
+function computeShotEndpointByRun(runValue, clickPoint, groundRect) {
+  const start = getFixedShotStart(groundRect);
+  const vectorX = clickPoint.x - start.x;
+  const vectorY = clickPoint.y - start.y;
+  const rawDistance = Math.hypot(vectorX, vectorY);
+
+  const unitDirection = rawDistance > 0
+    ? { x: vectorX / rawDistance, y: vectorY / rawDistance }
+    : { x: 0, y: -1 };
+
+  const boundaryDistance = getBoundaryDistanceAlongDirection(start, unitDirection, groundRect);
+  const safeInsideDistance = Math.max(boundaryDistance * 0.995, 0);
+  const minOutsideDistance = boundaryDistance;
+  const maxOutsideDistance = boundaryDistance * 1.1;
+
+  let endpointDistance = rawDistance;
+
+  if (runValue === 4 || runValue === 6) {
+    endpointDistance = Math.min(Math.max(rawDistance, minOutsideDistance), maxOutsideDistance);
+  } else {
+    endpointDistance = Math.min(rawDistance, safeInsideDistance);
+  }
+
+  return {
+    start,
+    end: {
+      x: start.x + unitDirection.x * endpointDistance,
+      y: start.y + unitDirection.y * endpointDistance,
+    },
+  };
+}
+
+function appendShot(runValue, endPoint, groundRect) {
+  const color = state.wagonWheel.runColors[runValue] || RUN_COLOR_MAP[runValue] || "#f4f2ea";
+  const shotPath = computeShotEndpointByRun(runValue, endPoint, groundRect);
+  const selectedPlayer = getSelectedPlayer();
+  const playerId = selectedPlayer?.id || "player-1";
+
+  if (!Array.isArray(state.wagonWheel.shotsByPlayer[playerId])) {
+    state.wagonWheel.shotsByPlayer[playerId] = [];
+  }
+
+  const playerShots = state.wagonWheel.shotsByPlayer[playerId];
+
+  playerShots.push({
+    runValue,
+    color,
+    start: toNormalizedPoint(shotPath.start, groundRect),
+    end: toNormalizedPoint(shotPath.end, groundRect),
+  });
+}
+
+function undoLastShot() {
+  const selectedPlayer = getSelectedPlayer();
+  const playerId = selectedPlayer?.id || "player-1";
+  const playerShots = getPlayerShots(playerId);
+
+  if (playerShots.length === 0) {
+    return;
+  }
+
+  playerShots.pop();
+  renderShotArrows();
+  renderTopRightSummaryCard();
+  saveInningsState();
+}
+
+function clearAllShots() {
+  state.wagonWheel.shotsByPlayer = {};
+  renderShotArrows();
+  renderTopRightSummaryCard();
+  saveInningsState();
+}
+
+function renderShotArrows() {
+  if (!shotArrowLayer || !groundCircle) {
+    return;
+  }
+
+  const groundRect = groundCircle.getBoundingClientRect();
+  shotArrowLayer.setAttribute("viewBox", `0 0 ${groundRect.width} ${groundRect.height}`);
+  shotArrowLayer.innerHTML = "";
+
+  const selectedPlayer = getSelectedPlayer();
+  const playerId = selectedPlayer?.id || "";
+  const playerShots = getPlayerShots(playerId);
+
+  playerShots.forEach((shot, index) => {
+    const start = fromNormalizedPoint(shot.start, groundRect);
+    const end = fromNormalizedPoint(shot.end, groundRect);
+
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.classList.add("shot-arrow-path");
+    path.dataset.shotIndex = String(index);
+    path.setAttribute("d", `M ${start.x} ${start.y} L ${end.x} ${end.y}`);
+    path.setAttribute("stroke", shot.color);
+    shotArrowLayer.appendChild(path);
+  });
+}
+
+function setupShotCapture() {
+  if (!groundCircle || !groundStage) {
+    return;
+  }
+
+  shotArrowLayer = createShotArrowLayer(groundCircle);
+  renderShotArrows();
+
+  groundStage.addEventListener("click", (event) => {
+    const runValue = state.wagonWheel.selectedRun;
+    if (!state.wagonWheel.enabled || !Number.isInteger(runValue)) {
+      return;
+    }
+
+    const groundRect = groundCircle.getBoundingClientRect();
+    const clickPoint = {
+      x: event.clientX - groundRect.left,
+      y: event.clientY - groundRect.top,
+    };
+
+    const clickedInsideBoundary = isInsideGroundCircle(clickPoint, groundRect);
+    const isBoundaryRun = runValue === 4 || runValue === 6;
+
+    if (isBoundaryRun && clickedInsideBoundary) {
+      return;
+    }
+
+    if (!isBoundaryRun && !clickedInsideBoundary) {
+      return;
+    }
+
+    const clickSignature = `${runValue}:${clickPoint.x.toFixed(2)}:${clickPoint.y.toFixed(2)}`;
+    const now = performance.now();
+    if (
+      lastShotClickSignature &&
+      lastShotClickSignature.signature === clickSignature &&
+      now - lastShotClickSignature.time < 90
+    ) {
+      return;
+    }
+
+    lastShotClickSignature = {
+      signature: clickSignature,
+      time: now,
+    };
+
+    appendShot(runValue, clickPoint, groundRect);
+    renderShotArrows();
+    renderTopRightSummaryCard();
+    saveInningsState();
+  });
+
+  window.addEventListener("resize", renderShotArrows);
 }
 
 function getGroundGeometry() {
@@ -824,6 +1150,7 @@ function render() {
 loadState();
 setupRunSelection();
 setupGroundOverlay();
+setupShotCapture();
 render();
 if (REVIEW_GROUND_OVERLAY_ENABLED) {
   window.addEventListener("resize", rerenderGroundOverlay);
