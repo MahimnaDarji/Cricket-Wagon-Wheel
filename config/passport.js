@@ -23,6 +23,24 @@ function getProfileName(profile) {
   return `${givenName} ${familyName}`.trim() || "Google User";
 }
 
+function getGoogleCallbackUrl() {
+  const explicit = (process.env.GOOGLE_CALLBACK_URL || "").trim();
+  if (explicit) {
+    return explicit;
+  }
+
+  const productionDomain =
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL || "").trim() ||
+    (process.env.VERCEL_URL || "").trim();
+
+  if (productionDomain) {
+    const base = productionDomain.startsWith("http") ? productionDomain : `https://${productionDomain}`;
+    return `${base.replace(/\/$/, "")}/auth/google/callback`;
+  }
+
+  return "http://localhost:5000/auth/google/callback";
+}
+
 function configurePassport() {
   if (!hasGoogleOAuthConfig()) {
     console.warn("Google OAuth is disabled. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to enable it.");
@@ -34,7 +52,7 @@ function configurePassport() {
       {
         clientID: process.env.GOOGLE_CLIENT_ID,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        callbackURL: process.env.GOOGLE_CALLBACK_URL || "http://localhost:5000/auth/google/callback",
+        callbackURL: getGoogleCallbackUrl(),
       },
       async (_accessToken, _refreshToken, profile, done) => {
         try {

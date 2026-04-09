@@ -6,6 +6,15 @@ const { isDatabaseReady } = require("../config/db");
 
 const router = express.Router();
 
+function toFrontendPath(pathname) {
+	const base = String(process.env.FRONTEND_URL || "").trim().replace(/\/$/, "");
+	if (!base) {
+		return pathname;
+	}
+
+	return `${base}${pathname}`;
+}
+
 router.post("/signup", signup);
 router.post("/login", login);
 router.get("/auth/me", currentUser);
@@ -37,14 +46,14 @@ router.get(
 	"/auth/google/callback",
 		(req, res, next) => {
 			if (!hasGoogleOAuthConfig()) {
-				return res.redirect("/?auth=error");
+				return res.redirect(toFrontendPath("/?auth=error"));
 			}
 
 			next();
 		},
-	passport.authenticate("google", { failureRedirect: "/?auth=error" }),
+	passport.authenticate("google", { failureRedirect: toFrontendPath("/?auth=error") }),
 	(req, res) => {
-		res.redirect("/dashboard.html");
+		res.redirect(toFrontendPath("/dashboard.html"));
 	}
 );
 

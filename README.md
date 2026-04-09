@@ -73,6 +73,78 @@ Notes:
 - Static fallback mode auto-enables on github.io and file:// hosts.
 - Use localhost:5000 if you want server + MongoDB authentication.
 
+## Vercel Deployment (Recommended for Google OAuth)
+
+This project now supports a single Vercel deployment that serves both frontend and backend together.
+
+Why this works for OAuth:
+
+- Frontend and backend share the same production domain.
+- Session data is stored in MongoDB (not in-memory), which is required for serverless OAuth flows.
+- Callback URLs and redirects stay on one host, avoiding CORS/session mismatch issues.
+
+### 1. Deploy to Vercel
+
+1. Push your latest code to GitHub.
+2. In Vercel, click **Add New Project** and import this repository.
+3. Framework preset: **Other**.
+4. Root directory: project root.
+5. Build command: leave empty.
+6. Output directory: leave empty.
+7. Deploy.
+
+### 2. Set Environment Variables in Vercel
+
+Set these in **Project Settings -> Environment Variables** (Production):
+
+- `MONGODB_URI` = your MongoDB Atlas connection string
+- `SESSION_SECRET` = long random secret
+- `BCRYPT_SALT_ROUNDS` = `12`
+- `GOOGLE_CLIENT_ID` = Google OAuth client ID
+- `GOOGLE_CLIENT_SECRET` = Google OAuth client secret
+- `GOOGLE_CALLBACK_URL` = `https://<your-vercel-domain>/auth/google/callback`
+- `FRONTEND_URL` = `https://<your-vercel-domain>`
+
+Example:
+
+- `GOOGLE_CALLBACK_URL=https://creasevision-auth.vercel.app/auth/google/callback`
+- `FRONTEND_URL=https://creasevision-auth.vercel.app`
+
+### 3. Update Google OAuth App Settings
+
+In Google Cloud Console -> APIs & Services -> Credentials -> your OAuth 2.0 Client ID:
+
+- Authorized redirect URIs:
+	- `https://<your-vercel-domain>/auth/google/callback`
+- Authorized JavaScript origins:
+	- `https://<your-vercel-domain>`
+
+Important:
+
+- The redirect URI must match exactly, including protocol (`https`), domain, and path (`/auth/google/callback`).
+- If you change Vercel domain, update both Google Console and `GOOGLE_CALLBACK_URL`.
+
+### 4. Verify Production Health
+
+After deployment, open:
+
+- `https://<your-vercel-domain>/health/env`
+
+Expected:
+
+- `ok: true`
+- `envReady: true`
+- `dbReady: true`
+- `missing: []`
+
+### 5. Production Checklist
+
+- Signup works and creates user in MongoDB.
+- Login works with session cookie.
+- Google login redirects to Google and returns to dashboard.
+- `/auth/me` returns the authenticated user after login.
+- `/auth/logout` clears session.
+
 ## API Endpoints
 
 - `POST /signup`

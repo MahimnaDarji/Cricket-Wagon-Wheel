@@ -29,13 +29,13 @@ const STATIC_AUTH_MODE =
 const LOCAL_USERS_KEY = "cww_local_users";
 const LOCAL_SESSION_KEY = "cww_session_user";
 
-const AUTH_BACKEND_ORIGIN =
-  window.location.origin === "http://localhost:5000"
-    ? ""
-    : "http://localhost:5000";
+const BASE_URL =
+  window.location.hostname === "localhost"
+    ? "http://localhost:5000"
+    : "";
 
 function toAuthUrl(path) {
-  return `${AUTH_BACKEND_ORIGIN}${path}`;
+  return `${BASE_URL}${path}`;
 }
 
 function toAppUrl(path) {
@@ -454,7 +454,7 @@ function setupGoogleButtons() {
           return;
         }
       } catch (_error) {
-        setFeedback(targetFeedback, "error", ["Unable to verify server readiness. Please try again."]);
+        setFeedback(targetFeedback, "error", ["Unable to connect to the server. Please try again."]);
         return;
       }
 
