@@ -1,6 +1,21 @@
 const bcrypt = require("bcrypt");
 const User = require("../models/User");
 
+function isDatabaseUnavailableError(error) {
+  if (!error) {
+    return false;
+  }
+
+  const message = String(error.message || "").toLowerCase();
+  return (
+    message.includes("timed out") ||
+    message.includes("server selection") ||
+    message.includes("topology") ||
+    message.includes("buffering timed out") ||
+    message.includes("connection")
+  );
+}
+
 function isValidEmail(email) {
   return /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(email);
 }
@@ -73,6 +88,10 @@ async function signup(req, res) {
     return res.status(201).json({ success: true, message: "Account created successfully." });
   } catch (error) {
     console.error("Signup error:", error);
+    if (isDatabaseUnavailableError(error)) {
+      return res.status(503).json({ success: false, message: "Database is not connected right now. Please try again in a moment." });
+    }
+
     return res.status(500).json({ success: false, message: "Unable to create account right now." });
   }
 }
@@ -119,6 +138,10 @@ async function login(req, res) {
     });
   } catch (error) {
     console.error("Login error:", error);
+    if (isDatabaseUnavailableError(error)) {
+      return res.status(503).json({ success: false, message: "Database is not connected right now. Please try again in a moment." });
+    }
+
     return res.status(500).json({ success: false, message: "Unable to login right now." });
   }
 }

@@ -5,11 +5,18 @@ const session = require("express-session");
 const passport = require("passport");
 const MongoStore = require("connect-mongo").default;
 
-const { isDatabaseReady } = require("./config/db");
+const { isDatabaseReady, getLastDatabaseError } = require("./config/db");
 const { configurePassport } = require("./config/passport");
 const authRoutes = require("./routes/authRoutes");
 
 dotenv.config();
+
+if (!global.__CWW_UNHANDLED_REJECTION_HANDLER__) {
+  process.on("unhandledRejection", (error) => {
+    console.error("Unhandled promise rejection:", error);
+  });
+  global.__CWW_UNHANDLED_REJECTION_HANDLER__ = true;
+}
 
 const app = express();
 
@@ -31,6 +38,27 @@ app.use(express.urlencoded({ extended: true }));
 const mongoUri = process.env.MONGODB_URI || "";
 const canUseMongoSessionStore = mongoUri.trim().length > 0 && !mongoUri.startsWith("REPLACE_WITH_");
 
+let sessionStore;
+if (canUseMongoSessionStore) {
+  try {
+    sessionStore = MongoStore.create({
+      mongoUrl: mongoUri,
+      collectionName: "sessions",
+      ttl: 60 * 60 * 24 * 7,
+      autoRemove: "native",
+      stringify: false,
+      touchAfter: 24 * 3600,
+    });
+
+    sessionStore.on("error", (error) => {
+      console.error("Session store error:", error.message);
+    });
+  } catch (error) {
+    console.error("Session store initialization failed, using in-memory store:", error.message);
+    sessionStore = undefined;
+  }
+}
+
 app.use(
   session({
     name: "cww.sid",
@@ -38,16 +66,7 @@ app.use(
     resave: false,
     saveUninitialized: false,
     proxy: process.env.NODE_ENV === "production",
-    store: canUseMongoSessionStore
-      ? MongoStore.create({
-          mongoUrl: mongoUri,
-          collectionName: "sessions",
-          ttl: 60 * 60 * 24 * 7,
-          autoRemove: "native",
-          stringify: false,
-          touchAfter: 24 * 3600,
-        })
-      : undefined,
+    store: sessionStore,
     cookie: {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -74,11 +93,13 @@ app.get("/health", (_req, res) => {
 
 app.get("/health/env", (_req, res) => {
   const missing = getMissingEnvVars();
+  const dbError = getLastDatabaseError();
 
   res.status(200).json({
     ok: true,
     envReady: missing.length === 0,
     dbReady: isDatabaseReady(),
+    dbError,
     missing,
     message:
       missing.length === 0
