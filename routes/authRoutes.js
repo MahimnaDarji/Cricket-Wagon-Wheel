@@ -1,6 +1,14 @@
 const express = require("express");
 const passport = require("passport");
-const { signup, login, currentUser, logout } = require("../controllers/authController");
+const {
+	signup,
+	login,
+	currentUser,
+	logout,
+	requestPasswordResetOtp,
+	verifyPasswordResetOtp,
+	resetPassword,
+} = require("../controllers/authController");
 const { hasGoogleOAuthConfig } = require("../config/passport");
 const { connectDatabase, isDatabaseReady } = require("../config/db");
 
@@ -32,10 +40,26 @@ async function ensureDatabaseConnection(req, res, next) {
 	}
 }
 
-router.use(["/signup", "/login", "/auth/me", "/auth/logout", "/auth/google", "/auth/google/callback"], ensureDatabaseConnection);
+router.use(
+	[
+		"/signup",
+		"/login",
+		"/auth/me",
+		"/auth/logout",
+		"/auth/google",
+		"/auth/google/callback",
+		"/auth/password/request-otp",
+		"/auth/password/verify-otp",
+		"/auth/password/reset",
+	],
+	ensureDatabaseConnection
+);
 
 router.post("/signup", signup);
 router.post("/login", login);
+router.post("/auth/password/request-otp", requestPasswordResetOtp);
+router.post("/auth/password/verify-otp", verifyPasswordResetOtp);
+router.post("/auth/password/reset", resetPassword);
 router.get("/auth/me", currentUser);
 router.post("/auth/logout", logout);
 

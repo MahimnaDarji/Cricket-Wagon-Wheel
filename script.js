@@ -11,9 +11,28 @@ const tabs = {
 
 const loginForm = document.getElementById("login-form");
 const signupForm = document.getElementById("signup-form");
+const authToggle = document.querySelector(".auth-toggle");
+const forgotRequestPanel = document.getElementById("panel-forgot-request");
+const forgotVerifyPanel = document.getElementById("panel-forgot-verify");
+const forgotResetPanel = document.getElementById("panel-forgot-reset");
 
 const loginFeedback = document.getElementById("login-feedback");
 const signupFeedback = document.getElementById("signup-feedback");
+const forgotTrigger = document.getElementById("forgot-password-trigger");
+const forgotRequestBack = document.getElementById("forgot-request-back");
+const forgotVerifyBack = document.getElementById("forgot-verify-back");
+const forgotResetBack = document.getElementById("forgot-reset-back");
+const forgotResendOtp = document.getElementById("forgot-resend-otp");
+const forgotRequestForm = document.getElementById("forgot-request-form");
+const forgotVerifyForm = document.getElementById("forgot-verify-form");
+const forgotResetForm = document.getElementById("forgot-reset-form");
+const forgotEmailInput = document.getElementById("forgot-email");
+const forgotOtpInput = document.getElementById("forgot-otp");
+const forgotNewPasswordInput = document.getElementById("forgot-new-password");
+const forgotConfirmPasswordInput = document.getElementById("forgot-confirm-password");
+const forgotFeedback = document.getElementById("forgot-feedback");
+const forgotVerifyFeedback = document.getElementById("forgot-verify-feedback");
+const forgotResetFeedback = document.getElementById("forgot-reset-feedback");
 const signupEmailInput = document.getElementById("signup-email");
 const signupPasswordInput = document.getElementById("signup-password");
 const signupEmailError = document.getElementById("signup-email-error");
@@ -33,6 +52,8 @@ const BASE_URL =
   window.location.hostname === "localhost"
     ? "http://localhost:5000"
     : "";
+
+let forgotFlowEmail = "";
 
 function toAuthUrl(path) {
   return `${BASE_URL}${path}`;
@@ -111,6 +132,39 @@ function switchTab(target) {
       value.panel.setAttribute("hidden", "true");
     }
   });
+}
+
+function switchAuthView(view) {
+  const viewPanels = {
+    login: tabs.login.panel,
+    signup: tabs.signup.panel,
+    forgotRequest: forgotRequestPanel,
+    forgotVerify: forgotVerifyPanel,
+    forgotReset: forgotResetPanel,
+  };
+
+  Object.values(viewPanels).forEach((panel) => {
+    if (!panel) {
+      return;
+    }
+
+    panel.classList.remove("active");
+    panel.setAttribute("hidden", "true");
+  });
+
+  if (viewPanels[view]) {
+    viewPanels[view].classList.add("active");
+    viewPanels[view].removeAttribute("hidden");
+  }
+
+  const showingPrimary = view === "login" || view === "signup";
+  if (authToggle) {
+    authToggle.hidden = !showingPrimary;
+  }
+
+  if (showingPrimary) {
+    switchTab(view);
+  }
 }
 
 function clearFieldStates(form) {
@@ -250,8 +304,8 @@ function setupSignupRealtimeValidation() {
 }
 
 function setupTabs() {
-  tabs.login.tab.addEventListener("click", () => switchTab("login"));
-  tabs.signup.tab.addEventListener("click", () => switchTab("signup"));
+  tabs.login.tab.addEventListener("click", () => switchAuthView("login"));
+  tabs.signup.tab.addEventListener("click", () => switchAuthView("signup"));
 }
 
 function setupLoginValidation() {
@@ -507,6 +561,190 @@ async function setupOAuthResultFeedback() {
   window.history.replaceState({}, document.title, window.location.pathname);
 }
 
+function resetForgotFlowState() {
+  forgotFlowEmail = "";
+  forgotRequestForm?.reset();
+  forgotVerifyForm?.reset();
+  forgotResetForm?.reset();
+  clearFeedback(forgotFeedback);
+  clearFeedback(forgotVerifyFeedback);
+  clearFeedback(forgotResetFeedback);
+}
+
+function setupForgotPasswordFlow() {
+  if (!forgotTrigger || !forgotRequestForm || !forgotVerifyForm || !forgotResetForm) {
+    return;
+  }
+
+  forgotTrigger.addEventListener("click", () => {
+    clearFeedback(loginFeedback);
+    resetForgotFlowState();
+    switchAuthView("forgotRequest");
+    if (forgotEmailInput) {
+      forgotEmailInput.focus();
+    }
+  });
+
+  forgotRequestBack?.addEventListener("click", () => {
+    resetForgotFlowState();
+    switchAuthView("login");
+  });
+
+  forgotVerifyBack?.addEventListener("click", () => {
+    clearFeedback(forgotVerifyFeedback);
+    switchAuthView("forgotRequest");
+    forgotEmailInput?.focus();
+  });
+
+  forgotResetBack?.addEventListener("click", () => {
+    clearFeedback(forgotResetFeedback);
+    switchAuthView("forgotVerify");
+    forgotOtpInput?.focus();
+  });
+
+  forgotRequestForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    clearFeedback(forgotFeedback);
+
+    const email = String(new FormData(forgotRequestForm).get("email") || "").trim().toLowerCase();
+    if (!email) {
+      setFeedback(forgotFeedback, "error", ["Email is required."]);
+      return;
+    }
+
+    if (!validateEmail(email)) {
+      setFeedback(forgotFeedback, "error", ["Please enter a valid email address."]);
+      return;
+    }
+
+    if (STATIC_AUTH_MODE) {
+      setFeedback(forgotFeedback, "error", ["Forgot password is unavailable on static hosting."]);
+      return;
+    }
+
+    try {
+      const result = await postJson("/auth/password/request-otp", { email });
+      if (!result.ok) {
+        setFeedback(forgotFeedback, "error", [result.data?.message || "Unable to send OTP right now. Please try again."]);
+        return;
+      }
+
+      forgotFlowEmail = email;
+      clearFeedback(forgotFeedback);
+      setFeedback(forgotVerifyFeedback, "success", [result.data?.message || "OTP sent to your email."]);
+      switchAuthView("forgotVerify");
+      forgotOtpInput?.focus();
+    } catch (_error) {
+      setFeedback(forgotFeedback, "error", ["Unable to connect to the server. Please try again."]);
+    }
+  });
+
+  forgotResendOtp?.addEventListener("click", async () => {
+    clearFeedback(forgotVerifyFeedback);
+
+    if (!forgotFlowEmail) {
+      setFeedback(forgotVerifyFeedback, "error", ["Enter your registered email first."]);
+      switchAuthView("forgotRequest");
+      return;
+    }
+
+    try {
+      const result = await postJson("/auth/password/request-otp", { email: forgotFlowEmail });
+      if (!result.ok) {
+        setFeedback(forgotVerifyFeedback, "error", [result.data?.message || "Unable to send OTP right now. Please try again."]);
+        return;
+      }
+
+      forgotVerifyForm?.reset();
+      setFeedback(forgotVerifyFeedback, "success", [result.data?.message || "OTP sent to your email."]);
+    } catch (_error) {
+      setFeedback(forgotVerifyFeedback, "error", ["Unable to connect to the server. Please try again."]);
+    }
+  });
+
+  forgotVerifyForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    clearFeedback(forgotVerifyFeedback);
+
+    const otp = String(new FormData(forgotVerifyForm).get("otp") || "").trim();
+    if (!forgotFlowEmail) {
+      setFeedback(forgotVerifyFeedback, "error", ["Start again by entering your registered email."]);
+      switchAuthView("forgotRequest");
+      return;
+    }
+
+    if (!otp) {
+      setFeedback(forgotVerifyFeedback, "error", ["OTP is required."]);
+      return;
+    }
+
+    try {
+      const result = await postJson("/auth/password/verify-otp", { email: forgotFlowEmail, otp });
+      if (!result.ok) {
+        setFeedback(forgotVerifyFeedback, "error", [result.data?.message || "Unable to verify OTP right now. Please try again."]);
+        return;
+      }
+
+      setFeedback(forgotVerifyFeedback, "success", [result.data?.message || "OTP verified. You can now reset your password."]);
+      switchAuthView("forgotReset");
+      forgotNewPasswordInput?.focus();
+    } catch (_error) {
+      setFeedback(forgotVerifyFeedback, "error", ["Unable to connect to the server. Please try again."]);
+    }
+  });
+
+  forgotResetForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    clearFeedback(forgotResetFeedback);
+
+    const formData = new FormData(forgotResetForm);
+    const newPassword = String(formData.get("newPassword") || "");
+    const confirmNewPassword = String(formData.get("confirmNewPassword") || "");
+
+    if (!forgotFlowEmail) {
+      setFeedback(forgotResetFeedback, "error", ["Start again by entering your registered email."]);
+      switchAuthView("forgotRequest");
+      return;
+    }
+
+    const issues = validatePassword(newPassword);
+    if (issues.length > 0) {
+      setFeedback(forgotResetFeedback, "error", issues);
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      setFeedback(forgotResetFeedback, "error", ["Password mismatch. Please confirm your new password."]);
+      return;
+    }
+
+    try {
+      const result = await postJson("/auth/password/reset", {
+        email: forgotFlowEmail,
+        newPassword,
+        confirmNewPassword,
+      });
+
+      if (!result.ok) {
+        const errors = Array.isArray(result.data?.errors) ? result.data.errors : [];
+        setFeedback(
+          forgotResetFeedback,
+          "error",
+          errors.length > 0 ? errors : [result.data?.message || "Unable to reset password right now. Please try again."]
+        );
+        return;
+      }
+
+      setFeedback(forgotResetFeedback, "success", [result.data?.message || "Password reset successful. You can now log in."]);
+      setFeedback(loginFeedback, "success", ["Password reset successful. Please log in with your new password."]);
+      resetForgotFlowState();
+      switchAuthView("login");
+    } catch (_error) {
+      setFeedback(forgotResetFeedback, "error", ["Unable to connect to the server. Please try again."]);
+    }
+  });
+}
+
 function wait(ms) {
   return new Promise((resolve) => {
     window.setTimeout(resolve, ms);
@@ -733,6 +971,7 @@ setupTabs();
 setupLoginValidation();
 setupSignupValidation();
 setupSignupRealtimeValidation();
+setupForgotPasswordFlow();
 setupGoogleButtons();
 setupOAuthResultFeedback();
 setupShotReplay();

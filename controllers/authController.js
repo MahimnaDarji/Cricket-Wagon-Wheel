@@ -1,5 +1,93 @@
 const bcrypt = require("bcrypt");
+const crypto = require("crypto");
+const nodemailer = require("nodemailer");
 const User = require("../models/User");
+
+const OTP_LENGTH = 6;
+const OTP_TTL_MINUTES = Number(process.env.OTP_TTL_MINUTES) || 10;
+
+let mailTransporterPromise = null;
+
+function generateNumericOtp(length = OTP_LENGTH) {
+  const max = 10 ** length;
+  const min = 10 ** (length - 1);
+  return String(crypto.randomInt(min, max));
+}
+
+function hashOtp(otp) {
+  const secret = process.env.OTP_SECRET || process.env.SESSION_SECRET || "fallback_otp_secret";
+  return crypto.createHash("sha256").update(`${otp}:${secret}`).digest("hex");
+}
+
+function hasEmailConfig() {
+  return Boolean(process.env.SMTP_HOST && process.env.SMTP_PORT && process.env.SMTP_USER && process.env.SMTP_PASS);
+}
+
+function isProduction() {
+  return String(process.env.NODE_ENV || "").toLowerCase() === "production";
+}
+
+async function getMailer() {
+  if (mailTransporterPromise) {
+    return mailTransporterPromise;
+  }
+
+  if (!hasEmailConfig()) {
+    throw new Error("Email service is not configured on the server.");
+  }
+
+  mailTransporterPromise = (async () => {
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: Number(process.env.SMTP_PORT),
+      secure: Number(process.env.SMTP_PORT) === 465,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+
+    await transporter.verify();
+    return transporter;
+  })().catch((error) => {
+    mailTransporterPromise = null;
+    throw error;
+  });
+
+  return mailTransporterPromise;
+}
+
+async function sendPasswordResetOtpEmail(toEmail, otp) {
+  if (!hasEmailConfig()) {
+    if (isProduction()) {
+      throw new Error("Email service is not configured on the server.");
+    }
+    console.log(`DEV OTP for ${toEmail}: ${otp}`);
+    return { devMode: true, otp };
+  }
+
+  const transporter = await getMailer();
+  const fromEmail = process.env.SMTP_FROM || process.env.SMTP_USER;
+
+  await transporter.sendMail({
+    from: `"CreaseVision" <${fromEmail}>`,
+    to: toEmail,
+    subject: "CreaseVision — Your Password Reset OTP",
+    text: `Your CreaseVision OTP is ${otp}. It expires in ${OTP_TTL_MINUTES} minutes. Do not share this with anyone.`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:32px;border:1px solid #e0e0e0;border-radius:8px">
+        <h2 style="color:#1a1a2e;margin-bottom:8px">🏏 CreaseVision</h2>
+        <p style="color:#444">Use the OTP below to reset your password:</p>
+        <div style="font-size:36px;font-weight:bold;letter-spacing:8px;color:#e63946;text-align:center;padding:16px 0">${otp}</div>
+        <p style="color:#666;font-size:13px">This OTP expires in <strong>${OTP_TTL_MINUTES} minutes</strong>. Do not share it with anyone.</p>
+        <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
+        <p style="color:#aaa;font-size:11px">If you did not request a password reset, you can safely ignore this email.</p>
+      </div>
+    `,
+  });
+
+  return { devMode: false };
+}
 
 function isDatabaseUnavailableError(error) {
   if (!error) {
@@ -176,9 +264,152 @@ function logout(req, res) {
   });
 }
 
+async function requestPasswordResetOtp(req, res) {
+  try {
+    const email = String(req.body.email || "").trim().toLowerCase();
+
+    if (!email) {
+      return res.status(400).json({ success: false, message: "Email is required." });
+    }
+
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ success: false, message: "Please enter a valid email address." });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ success: false, message: "No account found with this email." });
+    }
+
+    if (user.authProvider === "google" && !user.password) {
+      return res.status(400).json({ success: false, message: "This account uses Google sign-in. Please continue with Google." });
+    }
+
+    const otp = generateNumericOtp();
+    user.resetPasswordOtpHash = hashOtp(otp);
+    user.resetPasswordOtpExpiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000);
+    user.resetPasswordOtpVerified = false;
+    await user.save();
+
+    const delivery = await sendPasswordResetOtpEmail(user.email, otp);
+
+    if (delivery?.devMode) {
+      return res.status(200).json({
+        success: true,
+        message: "OTP generated in development mode. Check server logs.",
+        devOtp: delivery.otp,
+      });
+    }
+
+    return res.status(200).json({ success: true, message: "OTP sent to your email." });
+  } catch (error) {
+    console.error("Request OTP error:", error);
+    if (isDatabaseUnavailableError(error)) {
+      return res.status(503).json({ success: false, message: "Database is not connected right now. Please try again in a moment." });
+    }
+
+    if (String(error.message || "").includes("Email service is not configured")) {
+      return res.status(503).json({ success: false, message: "Email service is not configured on the server." });
+    }
+
+    return res.status(500).json({ success: false, message: "Unable to send OTP right now. Please try again." });
+  }
+}
+
+async function verifyPasswordResetOtp(req, res) {
+  try {
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const otp = String(req.body.otp || "").trim();
+
+    if (!email || !otp) {
+      return res.status(400).json({ success: false, message: "Email and OTP are required." });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user || !user.resetPasswordOtpHash || !user.resetPasswordOtpExpiresAt) {
+      return res.status(400).json({ success: false, message: "OTP is invalid or expired." });
+    }
+
+    if (new Date() > user.resetPasswordOtpExpiresAt) {
+      user.resetPasswordOtpHash = null;
+      user.resetPasswordOtpExpiresAt = null;
+      user.resetPasswordOtpVerified = false;
+      await user.save();
+      return res.status(400).json({ success: false, message: "OTP has expired. Please request a new OTP." });
+    }
+
+    const incomingHash = hashOtp(otp);
+    if (incomingHash !== user.resetPasswordOtpHash) {
+      return res.status(400).json({ success: false, message: "Wrong OTP. Please try again." });
+    }
+
+    user.resetPasswordOtpVerified = true;
+    await user.save();
+
+    return res.status(200).json({ success: true, message: "OTP verified. You can now reset your password." });
+  } catch (error) {
+    console.error("Verify OTP error:", error);
+    if (isDatabaseUnavailableError(error)) {
+      return res.status(503).json({ success: false, message: "Database is not connected right now. Please try again in a moment." });
+    }
+
+    return res.status(500).json({ success: false, message: "Unable to verify OTP right now. Please try again." });
+  }
+}
+
+async function resetPassword(req, res) {
+  try {
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const newPassword = String(req.body.newPassword || "");
+    const confirmNewPassword = String(req.body.confirmNewPassword || "");
+
+    if (!email || !newPassword || !confirmNewPassword) {
+      return res.status(400).json({ success: false, message: "Email, new password and confirmation are required." });
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      return res.status(400).json({ success: false, message: "Password mismatch. Please confirm your new password." });
+    }
+
+    const issues = passwordErrors(newPassword);
+    if (issues.length > 0) {
+      return res.status(400).json({ success: false, message: "Validation failed.", errors: issues });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ success: false, message: "No account found with this email." });
+    }
+
+    if (!user.resetPasswordOtpVerified || !user.resetPasswordOtpExpiresAt || new Date() > user.resetPasswordOtpExpiresAt) {
+      return res.status(400).json({ success: false, message: "OTP is invalid or expired. Please verify OTP again." });
+    }
+
+    const saltRounds = Number(process.env.BCRYPT_SALT_ROUNDS) || 12;
+    user.password = await bcrypt.hash(newPassword, saltRounds);
+    user.authProvider = "local";
+    user.resetPasswordOtpHash = null;
+    user.resetPasswordOtpExpiresAt = null;
+    user.resetPasswordOtpVerified = false;
+    await user.save();
+
+    return res.status(200).json({ success: true, message: "Password reset successful. You can now log in." });
+  } catch (error) {
+    console.error("Reset password error:", error);
+    if (isDatabaseUnavailableError(error)) {
+      return res.status(503).json({ success: false, message: "Database is not connected right now. Please try again in a moment." });
+    }
+
+    return res.status(500).json({ success: false, message: "Unable to reset password right now. Please try again." });
+  }
+}
+
 module.exports = {
   signup,
   login,
   currentUser,
   logout,
+  requestPasswordResetOtp,
+  verifyPasswordResetOtp,
+  resetPassword,
 };

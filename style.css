@@ -333,14 +333,12 @@ input.input-success {
 }
 
 .cta.primary {
-  margin-top: 0.24rem;
   background-color: #212a31;
   border-color: #101811;
   color: #f5f1e6;
 }
 
 .cta.google {
-  margin-top: 0.36rem;
   border-color: #666d66;
   background: #d2d8c8;
   color: #1d2421;
@@ -362,11 +360,39 @@ input.input-success {
   font-size: 0.8rem;
 }
 
+.inline-action {
+  margin-top: 0.24rem;
+  background: none;
+  border: none;
+  color: #2d3a57;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+
+.auth-flow-heading {
+  margin: 0 0 0.45rem;
+  font-family: "Oswald", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 1.14rem;
+  color: #273029;
+}
+
 .cta.ghost {
-  margin-top: 0.45rem;
   border-color: #5d4529;
   color: #2d261f;
   background-color: #b59670;
+}
+
+.btn-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
 }
 
 .feedback {

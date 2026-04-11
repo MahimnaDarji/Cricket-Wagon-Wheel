@@ -28,6 +28,13 @@ SESSION_SECRET=replace_with_a_long_random_secret
 GOOGLE_CLIENT_ID=replace_with_google_client_id
 GOOGLE_CLIENT_SECRET=replace_with_google_client_secret
 GOOGLE_CALLBACK_URL=http://localhost:5000/auth/google/callback
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=replace_with_sender_email
+SMTP_PASS=replace_with_sender_app_password
+SMTP_FROM=replace_with_sender_email
+OTP_SECRET=replace_with_random_secret
+OTP_TTL_MINUTES=10
 ```
 
 3. Start MongoDB locally (or provide your Atlas URI in `MONGODB_URI`).
@@ -154,6 +161,18 @@ Expected:
 - `POST /login`
 	- Body: `{ "email": "...", "password": "..." }`
 	- Validates credentials by comparing password with stored bcrypt hash.
+
+- `POST /auth/password/request-otp`
+	- Body: `{ "email": "..." }`
+	- Generates time-limited OTP and sends it to registered email.
+
+- `POST /auth/password/verify-otp`
+	- Body: `{ "email": "...", "otp": "123456" }`
+	- Verifies OTP and unlocks password reset step.
+
+- `POST /auth/password/reset`
+	- Body: `{ "email": "...", "newPassword": "...", "confirmNewPassword": "..." }`
+	- Applies strong password validation and saves hashed password.
 
 - `GET /auth/google?mode=login|signup`
 	- Redirects user to Google OAuth consent.

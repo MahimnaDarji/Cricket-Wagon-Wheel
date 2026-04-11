@@ -43,14 +43,16 @@
             <input id="login-password" name="password" type="password" placeholder="Enter your password" autocomplete="current-password" required />
 
             <div id="login-feedback" class="feedback" aria-live="polite"></div>
-
-            <button type="submit" class="cta primary">Login</button>
           </form>
 
-          <button type="button" class="cta google" data-google-action="login">
-            <span class="google-mark" aria-hidden="true">G</span>
-            Login with Google
-          </button>
+          <div class="btn-stack">
+            <button type="submit" form="login-form" class="cta primary">Login</button>
+            <button type="button" class="cta google" data-google-action="login">
+              <span class="google-mark" aria-hidden="true">G</span>
+              Login with Google
+            </button>
+            <button type="button" id="forgot-password-trigger" class="cta ghost">Forgot Password?</button>
+          </div>
         </section>
 
         <section id="panel-signup" class="form-panel" role="tabpanel" aria-labelledby="tab-signup" hidden>
@@ -78,6 +80,44 @@
             <span class="google-mark" aria-hidden="true">G</span>
             Sign up with Google
           </button>
+        </section>
+
+        <section id="panel-forgot-request" class="form-panel" hidden>
+          <h3 class="auth-flow-heading">Forgot Password</h3>
+          <form id="forgot-request-form" novalidate>
+            <label for="forgot-email">Registered Email</label>
+            <input id="forgot-email" name="email" type="email" placeholder="you@club.com" autocomplete="email" required />
+            <div id="forgot-feedback" class="feedback" aria-live="polite"></div>
+            <button type="submit" class="cta primary">Send OTP</button>
+          </form>
+          <button type="button" id="forgot-request-back" class="cta ghost">Back to Login</button>
+        </section>
+
+        <section id="panel-forgot-verify" class="form-panel" hidden>
+          <h3 class="auth-flow-heading">Verify OTP</h3>
+          <form id="forgot-verify-form" novalidate>
+            <label for="forgot-otp">OTP</label>
+            <input id="forgot-otp" name="otp" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="6-digit OTP" required />
+            <div id="forgot-verify-feedback" class="feedback" aria-live="polite"></div>
+            <button type="submit" class="cta primary">Verify OTP</button>
+          </form>
+          <button type="button" id="forgot-resend-otp" class="cta ghost">Resend OTP</button>
+          <button type="button" id="forgot-verify-back" class="cta ghost">Back</button>
+        </section>
+
+        <section id="panel-forgot-reset" class="form-panel" hidden>
+          <h3 class="auth-flow-heading">Reset Password</h3>
+          <form id="forgot-reset-form" novalidate>
+            <label for="forgot-new-password">New Password</label>
+            <input id="forgot-new-password" name="newPassword" type="password" placeholder="Create a strong password" autocomplete="new-password" required />
+
+            <label for="forgot-confirm-password">Confirm New Password</label>
+            <input id="forgot-confirm-password" name="confirmNewPassword" type="password" placeholder="Re-enter password" autocomplete="new-password" required />
+
+            <div id="forgot-reset-feedback" class="feedback" aria-live="polite"></div>
+            <button type="submit" class="cta primary">Reset Password</button>
+          </form>
+          <button type="button" id="forgot-reset-back" class="cta ghost">Back</button>
         </section>
 
       </div>

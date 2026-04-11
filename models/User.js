@@ -34,6 +34,18 @@ const userSchema = new mongoose.Schema(
       enum: ["local", "google"],
       default: "local",
     },
+    resetPasswordOtpHash: {
+      type: String,
+      default: null,
+    },
+    resetPasswordOtpExpiresAt: {
+      type: Date,
+      default: null,
+    },
+    resetPasswordOtpVerified: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,
