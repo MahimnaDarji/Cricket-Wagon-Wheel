@@ -72,14 +72,15 @@
             <input id="signup-confirm-password" name="confirmPassword" type="password" placeholder="Re-enter password" autocomplete="new-password" required />
 
             <div id="signup-feedback" class="feedback" aria-live="polite"></div>
-
-            <button type="submit" class="cta primary">Create Account</button>
           </form>
 
-          <button type="button" class="cta google" data-google-action="signup">
-            <span class="google-mark" aria-hidden="true">G</span>
-            Sign up with Google
-          </button>
+          <div class="btn-stack">
+            <button type="submit" form="signup-form" class="cta primary">Create Account</button>
+            <button type="button" class="cta google" data-google-action="signup">
+              <span class="google-mark" aria-hidden="true">G</span>
+              Sign up with Google
+            </button>
+          </div>
         </section>
 
         <section id="panel-forgot-request" class="form-panel" hidden>
@@ -88,9 +89,11 @@
             <label for="forgot-email">Registered Email</label>
             <input id="forgot-email" name="email" type="email" placeholder="you@club.com" autocomplete="email" required />
             <div id="forgot-feedback" class="feedback" aria-live="polite"></div>
-            <button type="submit" class="cta primary">Send OTP</button>
           </form>
-          <button type="button" id="forgot-request-back" class="cta ghost">Back to Login</button>
+          <div class="btn-stack">
+            <button type="submit" form="forgot-request-form" class="cta primary">Send OTP</button>
+            <button type="button" id="forgot-request-back" class="cta ghost">Back to Login</button>
+          </div>
         </section>
 
         <section id="panel-forgot-verify" class="form-panel" hidden>
@@ -99,10 +102,12 @@
             <label for="forgot-otp">OTP</label>
             <input id="forgot-otp" name="otp" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="6-digit OTP" required />
             <div id="forgot-verify-feedback" class="feedback" aria-live="polite"></div>
-            <button type="submit" class="cta primary">Verify OTP</button>
           </form>
-          <button type="button" id="forgot-resend-otp" class="cta ghost">Resend OTP</button>
-          <button type="button" id="forgot-verify-back" class="cta ghost">Back</button>
+          <div class="btn-stack">
+            <button type="submit" form="forgot-verify-form" class="cta primary">Verify OTP</button>
+            <button type="button" id="forgot-resend-otp" class="cta ghost">Resend OTP</button>
+            <button type="button" id="forgot-verify-back" class="cta ghost">Back</button>
+          </div>
         </section>
 
         <section id="panel-forgot-reset" class="form-panel" hidden>
@@ -115,9 +120,11 @@
             <input id="forgot-confirm-password" name="confirmNewPassword" type="password" placeholder="Re-enter password" autocomplete="new-password" required />
 
             <div id="forgot-reset-feedback" class="feedback" aria-live="polite"></div>
-            <button type="submit" class="cta primary">Reset Password</button>
           </form>
-          <button type="button" id="forgot-reset-back" class="cta ghost">Back</button>
+          <div class="btn-stack">
+            <button type="submit" form="forgot-reset-form" class="cta primary">Reset Password</button>
+            <button type="button" id="forgot-reset-back" class="cta ghost">Back</button>
+          </div>
         </section>
 
       </div>
