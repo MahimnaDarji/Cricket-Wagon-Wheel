@@ -47,6 +47,8 @@ const RUN_COLOR_MAP = {
   6: "#ef4444",
 };
 
+const DEBUG_HISTORY = false;
+
 const groundCircle = document.querySelector(".ground-circle");
 const groundStage = document.querySelector(".ground-stage");
 const pitchStrip = document.querySelector(".pitch-strip");
@@ -494,41 +496,114 @@ function getPlayerNameForPrompt() {
   return player?.name || "Player";
 }
 
-function saveInningsState() {
+function getSelectedPlayerCompletedBalls() {
   const selectedPlayer = getSelectedPlayer();
-  const playerRosterNameById = state.players.reduce((acc, player) => {
-    acc[player.id] = player.name;
-    return acc;
-  }, {});
+  const playerId = selectedPlayer?.id || "";
 
-  const payload = {
+  const savedBalls = (getPlayerBalls(playerId) || []).map((ball, index) => ({
+    ballNumber: Number.isInteger(Number(ball?.ballNumber)) ? Number(ball.ballNumber) : index + 1,
+    run: Number(ball?.run) || 0,
+    color: String(ball?.color || state.wagonWheel.runColors[Number(ball?.run)] || ""),
+  }));
+
+  const shotBalls = (getPlayerShots(playerId) || []).map((shot, index) => {
+    const run = Number(shot?.runValue) || 0;
+    return {
+      ballNumber: index + 1,
+      run,
+      color: String(shot?.color || state.wagonWheel.runColors[run] || ""),
+    };
+  });
+
+  // If shots capture more balls than explicit Next Ball commits, trust shot capture as source of truth.
+  if (shotBalls.length > savedBalls.length) {
+    return shotBalls;
+  }
+
+  return savedBalls;
+}
+
+function buildCompletedInningsRecord() {
+  const selectedPlayer = getSelectedPlayer();
+  const completedBalls = getSelectedPlayerCompletedBalls();
+  const runsSequence = completedBalls.map((ball) => Number(ball.run) || 0);
+  const totalRuns = runsSequence.reduce((sum, run) => sum + run, 0);
+  const totalBalls = completedBalls.length;
+  const savedAt = new Date().toISOString();
+
+  if (DEBUG_HISTORY) {
+    console.log("[History Debug] completedBalls", completedBalls);
+    console.log("[History Debug] totals", { totalRuns, totalBalls, runsSequence });
+  }
+
+  return {
+    id: `${selectedPlayer?.id || "player"}-${savedAt}-${Math.random().toString(36).slice(2, 7)}`,
     playerId: selectedPlayer?.id || null,
     playerName: selectedPlayer?.name || "Player",
-    playerRosterNameById,
+    playerRosterNameById: {
+      [selectedPlayer?.id || "player"]: selectedPlayer?.name || "Player",
+    },
     groundName: state.ground.stadiumName,
     groundMode: state.ground.mode,
     runColors: { ...state.wagonWheel.runColors },
-    ballsByPlayer: Object.entries(state.wagonWheel.inningsBallsByPlayer).reduce((acc, [playerId, balls]) => {
-      acc[playerId] = (balls || []).map((ball) => ({ ...ball }));
-      return acc;
-    }, {}),
-    shotsByPlayer: Object.entries(state.wagonWheel.shotsByPlayer).reduce((acc, [playerId, shots]) => {
-      acc[playerId] = (shots || []).map((shot) => ({
+    runsSequence,
+    totalRuns,
+    totalBalls,
+    ballsByPlayer: {
+      [selectedPlayer?.id || "player"]: completedBalls.map((ball) => ({ ...ball })),
+    },
+    shotsByPlayer: {
+      [selectedPlayer?.id || "player"]: (getPlayerShots(selectedPlayer?.id || "") || []).map((shot) => ({
         runValue: Number(shot.runValue) || 0,
         color: String(shot.color || ""),
         start: { ...shot.start },
         end: { ...shot.end },
-      }));
-      return acc;
-    }, {}),
-    balls: (() => {
-      const activePlayerBalls = getPlayerBalls(selectedPlayer?.id || "");
-      return activePlayerBalls.map((ball) => ({ ...ball }));
-    })(),
-    savedAt: new Date().toISOString(),
+      })),
+    },
+    balls: completedBalls.map((ball) => ({ ...ball })),
+    savedAt,
   };
+}
+
+function saveInningsState() {
+  const payload = buildCompletedInningsRecord();
 
   localStorage.setItem("wagonWheelInnings", JSON.stringify(payload));
+
+  return payload;
+}
+
+function appendInningsToHistory(record) {
+  if (!record || typeof record !== "object") {
+    return;
+  }
+
+  const history = (() => {
+    try {
+      const existing = JSON.parse(localStorage.getItem("wagonWheelHistory") || "[]");
+      return Array.isArray(existing) ? existing : [];
+    } catch {
+      return [];
+    }
+  })();
+
+  const normalized = {
+    ...record,
+    id: String(record.id || `${record.playerId || "player"}-${record.savedAt || Date.now()}`),
+    savedAt: record.savedAt || new Date().toISOString(),
+    runsSequence: Array.isArray(record.runsSequence) ? record.runsSequence.map((run) => Number(run) || 0) : [],
+    totalRuns: Number(record.totalRuns) || 0,
+    totalBalls: Number(record.totalBalls) || 0,
+  };
+
+  const deduped = history.filter((entry) => String(entry?.id || "") !== normalized.id);
+  deduped.unshift(normalized);
+
+  if (DEBUG_HISTORY) {
+    console.log("[History Debug] saving record", normalized);
+  }
+
+  localStorage.setItem("wagonWheelHistory", JSON.stringify(deduped.slice(0, 50)));
 }
 
 function saveCurrentBallAndResetSelection() {
@@ -581,7 +656,8 @@ function completeInningsAndContinue() {
     saveCurrentBallAndResetSelection();
   }
 
-  saveInningsState();
+  const completedRecord = saveInningsState();
+  appendInningsToHistory(completedRecord);
   if (downloadExportBlock) {
     downloadExportBlock.classList.remove("is-hidden");
   }

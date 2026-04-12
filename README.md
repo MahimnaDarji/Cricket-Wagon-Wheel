@@ -183,6 +183,17 @@ Expected:
 - `GET /auth/me`
 	- Returns the currently authenticated session user.
 
+- `GET /auth/profile`
+	- Returns profile data for the currently authenticated user.
+
+- `PUT /auth/profile`
+	- Body: `{ "name": "...", "email": "...", "profileImageUrl": "...", "preferences": { "theme": "system|light|dark" } }`
+	- Updates profile details, image, and preferences.
+
+- `PUT /auth/profile/password`
+	- Body: `{ "currentPassword": "...", "newPassword": "...", "confirmNewPassword": "..." }`
+	- Updates account password securely using bcrypt hashing.
+
 - `POST /auth/logout`
 	- Clears active session.
 
@@ -194,3 +205,4 @@ Expected:
 - Passwords are never stored in plain text.
 - Frontend login/signup forms are connected directly to `/login` and `/signup`.
 - Google users are stored with `name`, `email`, `googleId` and are not required to have a password.
+- Profile Settings page is available at `/profile.html` after login.

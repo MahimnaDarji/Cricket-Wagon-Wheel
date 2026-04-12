@@ -130,6 +130,36 @@ function passwordErrors(password) {
   return errors;
 }
 
+function normalizeTheme(theme) {
+  const normalized = String(theme || "system").trim().toLowerCase();
+  if (["system", "light", "dark"].includes(normalized)) {
+    return normalized;
+  }
+
+  return "system";
+}
+
+function normalizeProfileImageUrl(value) {
+  const profileImageUrl = String(value || "").trim();
+
+  if (!profileImageUrl) {
+    return "";
+  }
+
+  const isHttpUrl = /^https?:\/\//i.test(profileImageUrl);
+  const isImageDataUrl = /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(profileImageUrl);
+
+  if (!isHttpUrl && !isImageDataUrl) {
+    throw new Error("Profile image must be a valid image URL or image upload.");
+  }
+
+  if (profileImageUrl.length > 200000) {
+    throw new Error("Profile image is too large. Please use a smaller image.");
+  }
+
+  return profileImageUrl;
+}
+
 async function signup(req, res) {
   try {
     const name = String(req.body.name || "").trim();
@@ -221,6 +251,10 @@ async function login(req, res) {
           name: user.name,
           email: user.email,
           authProvider: user.authProvider,
+          profileImageUrl: user.profileImageUrl || "",
+          preferences: {
+            theme: normalizeTheme(user.preferences?.theme),
+          },
         },
       });
     });
@@ -246,8 +280,151 @@ function currentUser(req, res) {
       name: req.user.name,
       email: req.user.email,
       authProvider: req.user.authProvider,
+      profileImageUrl: req.user.profileImageUrl || "",
+      preferences: {
+        theme: normalizeTheme(req.user.preferences?.theme),
+      },
     },
   });
+}
+
+async function updateProfile(req, res) {
+  try {
+    if (!req.isAuthenticated() || !req.user) {
+      return res.status(401).json({ success: false, message: "Not authenticated." });
+    }
+
+    const name = String(req.body.name || "").trim();
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const rawTheme = req.body.preferences?.theme;
+
+    if (!name) {
+      return res.status(400).json({ success: false, message: "Full name is required." });
+    }
+
+    if (name.length < 2 || name.length > 80) {
+      return res.status(400).json({ success: false, message: "Name must be between 2 and 80 characters." });
+    }
+
+    if (!email) {
+      return res.status(400).json({ success: false, message: "Email is required." });
+    }
+
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ success: false, message: "Please enter a valid email address." });
+    }
+
+    let profileImageUrl = "";
+    try {
+      profileImageUrl = normalizeProfileImageUrl(req.body.profileImageUrl);
+    } catch (validationError) {
+      return res.status(400).json({ success: false, message: validationError.message });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User account not found." });
+    }
+
+    if (user.email !== email) {
+      const existingUser = await User.findOne({ email }).lean();
+      if (existingUser) {
+        return res.status(409).json({ success: false, message: "This email is already used by another account." });
+      }
+    }
+
+    user.name = name;
+    user.email = email;
+    user.profileImageUrl = profileImageUrl;
+    user.preferences = {
+      ...(user.preferences || {}),
+      theme: normalizeTheme(rawTheme),
+    };
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Profile updated successfully.",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        authProvider: user.authProvider,
+        profileImageUrl: user.profileImageUrl || "",
+        preferences: {
+          theme: normalizeTheme(user.preferences?.theme),
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Update profile error:", error);
+    if (isDatabaseUnavailableError(error)) {
+      return res.status(503).json({ success: false, message: "Database is not connected right now. Please try again in a moment." });
+    }
+
+    return res.status(500).json({ success: false, message: "Unable to update profile right now." });
+  }
+}
+
+async function updatePassword(req, res) {
+  try {
+    if (!req.isAuthenticated() || !req.user) {
+      return res.status(401).json({ success: false, message: "Not authenticated." });
+    }
+
+    const currentPassword = String(req.body.currentPassword || "");
+    const newPassword = String(req.body.newPassword || "");
+    const confirmNewPassword = String(req.body.confirmNewPassword || "");
+
+    if (!newPassword || !confirmNewPassword) {
+      return res.status(400).json({ success: false, message: "New password and confirmation are required." });
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      return res.status(400).json({ success: false, message: "Password mismatch. Please confirm your new password." });
+    }
+
+    const issues = passwordErrors(newPassword);
+    if (issues.length > 0) {
+      return res.status(400).json({ success: false, message: "Validation failed.", errors: issues });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User account not found." });
+    }
+
+    if (user.password) {
+      if (!currentPassword) {
+        return res.status(400).json({ success: false, message: "Current password is required." });
+      }
+
+      const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
+      if (!isCurrentPasswordValid) {
+        return res.status(401).json({ success: false, message: "Current password is incorrect." });
+      }
+
+      const isSameAsCurrent = await bcrypt.compare(newPassword, user.password);
+      if (isSameAsCurrent) {
+        return res.status(400).json({ success: false, message: "New password must be different from current password." });
+      }
+    }
+
+    const saltRounds = Number(process.env.BCRYPT_SALT_ROUNDS) || 12;
+    user.password = await bcrypt.hash(newPassword, saltRounds);
+    user.authProvider = "local";
+    await user.save();
+
+    return res.status(200).json({ success: true, message: "Password updated successfully." });
+  } catch (error) {
+    console.error("Update password error:", error);
+    if (isDatabaseUnavailableError(error)) {
+      return res.status(503).json({ success: false, message: "Database is not connected right now. Please try again in a moment." });
+    }
+
+    return res.status(500).json({ success: false, message: "Unable to update password right now." });
+  }
 }
 
 function logout(req, res) {
@@ -408,6 +585,8 @@ module.exports = {
   signup,
   login,
   currentUser,
+  updateProfile,
+  updatePassword,
   logout,
   requestPasswordResetOtp,
   verifyPasswordResetOtp,

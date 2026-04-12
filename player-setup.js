@@ -31,6 +31,10 @@ const STYLE = {
 const TEAM_MIN_PLAYERS = 3;
 const TEAM_MAX_PLAYERS = 11;
 let nextPlayerId = 1;
+let profileDefaultName = "";
+let profileDefaultImageUrl = "";
+let hasManualIndividualNameEdit = false;
+let hasManualIndividualAvatarEdit = false;
 
 const DEFAULT_AVATAR = `data:image/svg+xml;utf8,${encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" fill="none">
@@ -86,6 +90,54 @@ function getSelectedPlayer() {
 
 function getAvatarSource(player) {
   return player.avatar || DEFAULT_AVATAR;
+}
+
+function sanitizeProfileName(value) {
+  return String(value || "").trim();
+}
+
+function sanitizeProfileImage(value) {
+  return String(value || "").trim();
+}
+
+function isInitialIndividualName(value) {
+  const name = String(value || "").trim();
+  return name === "" || /^player\s*1$/i.test(name);
+}
+
+function applyProfileNameToIndividualIfEligible() {
+  if (!profileDefaultName || hasManualIndividualNameEdit) {
+    return;
+  }
+
+  const currentName = String(state.individualPlayer?.name || "").trim();
+  if (!isInitialIndividualName(currentName) && currentName !== profileDefaultName) {
+    return;
+  }
+
+  state.individualPlayer.name = profileDefaultName;
+}
+
+function applyProfileAvatarToIndividualIfEligible() {
+  if (!profileDefaultImageUrl || hasManualIndividualAvatarEdit) {
+    return;
+  }
+
+  const currentAvatar = String(state.individualPlayer?.avatar || "").trim();
+  if (currentAvatar && currentAvatar !== profileDefaultImageUrl) {
+    return;
+  }
+
+  state.individualPlayer.avatar = profileDefaultImageUrl;
+}
+
+async function loadProfileDefaults() {
+  const user = await window.CWWAuth?.getSessionUser?.();
+  profileDefaultName = sanitizeProfileName(user?.name);
+  profileDefaultImageUrl = sanitizeProfileImage(user?.profileImageUrl);
+
+  applyProfileNameToIndividualIfEligible();
+  applyProfileAvatarToIndividualIfEligible();
 }
 
 function getStyleLabel(style) {
@@ -157,6 +209,11 @@ function setMode(nextMode) {
 
   if (!individualActive && !state.teamPlayers.some((player) => player.id === state.selectedTeamPlayerId)) {
     state.selectedTeamPlayerId = state.teamPlayers[0]?.id || null;
+  }
+
+  if (individualActive) {
+    applyProfileNameToIndividualIfEligible();
+    applyProfileAvatarToIndividualIfEligible();
   }
 
   render();
@@ -373,6 +430,10 @@ playerNameInput.addEventListener("input", (event) => {
     return;
   }
 
+  if (state.mode === MODES.INDIVIDUAL) {
+    hasManualIndividualNameEdit = true;
+  }
+
   updatePlayerName(target.value);
 });
 
@@ -394,6 +455,9 @@ avatarInput.addEventListener("change", async (event) => {
 
   try {
     const imageDataUrl = await readImageFile(file);
+    if (state.mode === MODES.INDIVIDUAL) {
+      hasManualIndividualAvatarEdit = true;
+    }
     updateAvatar(imageDataUrl);
   } catch (_error) {
     updateAvatar("");
@@ -402,6 +466,9 @@ avatarInput.addEventListener("change", async (event) => {
 
 clearAvatarButton.addEventListener("click", () => {
   avatarInput.value = "";
+  if (state.mode === MODES.INDIVIDUAL) {
+    hasManualIndividualAvatarEdit = true;
+  }
   updateAvatar("");
 });
 
@@ -409,4 +476,9 @@ confirmContinueButton.addEventListener("click", () => {
   confirmAndContinue();
 });
 
-render();
+async function init() {
+  await loadProfileDefaults();
+  render();
+}
+
+init();

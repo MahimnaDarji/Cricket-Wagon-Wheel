@@ -34,6 +34,19 @@ const userSchema = new mongoose.Schema(
       enum: ["local", "google"],
       default: "local",
     },
+    profileImageUrl: {
+      type: String,
+      trim: true,
+      default: "",
+      maxlength: 200000,
+    },
+    preferences: {
+      theme: {
+        type: String,
+        enum: ["system", "light", "dark"],
+        default: "system",
+      },
+    },
     resetPasswordOtpHash: {
       type: String,
       default: null,

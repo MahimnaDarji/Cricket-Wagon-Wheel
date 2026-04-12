@@ -13,11 +13,11 @@
   <div class="dashboard-shell">
     <header class="dash-header">
       <div class="brand-wrap">
-        <p class="brand-eyebrow">CreaseVision Platform</p>
         <h1>CreaseVision Control Desk</h1>
       </div>
-      <div class="profile-wrap" aria-label="Logout area">
-        <a class="logout-btn" href="index.html">Logout</a>
+      <div class="profile-wrap" aria-label="Account actions">
+        <a class="profile-btn" href="profile.html">Profile Settings</a>
+        <a class="logout-btn" href="index.html" data-logout="true">Logout</a>
       </div>
     </header>
 
@@ -47,8 +47,9 @@
           <p id="ground-mode" class="live-line">Ground Mode: Preset</p>
         </section>
 
-        <section class="setup-block" aria-label="Make your own wagon wheel controls">
+        <section class="setup-block runs-control-block" aria-label="Make your own wagon wheel controls">
           <p class="setup-label">Make Your Own Wagon Wheel</p>
+          <p class="control-note">Choose a run, mark your shot on the ground, then save each ball.</p>
           <button id="wagon-wheel-toggle" type="button" class="wagon-wheel-toggle" aria-pressed="false">
             Select Runs
           </button>
@@ -59,8 +60,11 @@
               <button id="next-ball-btn" type="button" class="wagon-wheel-action-btn">Next Ball</button>
               <button id="undo-shot-btn" type="button" class="wagon-wheel-action-btn">Undo</button>
               <button id="clear-shots-btn" type="button" class="wagon-wheel-action-btn">Clear All Shots</button>
-              <button id="complete-innings-btn" type="button" class="wagon-wheel-action-btn complete">Complete Innings</button>
             </div>
+          </div>
+
+          <div class="complete-innings-wrap" aria-label="Complete innings action">
+            <button id="complete-innings-btn" type="button" class="wagon-wheel-action-btn complete">Complete Innings</button>
           </div>
         </section>
 
@@ -120,6 +124,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
+  <script src="auth-header.js" defer></script>
   <script src="review.js" defer></script>
 </body>
 </html>

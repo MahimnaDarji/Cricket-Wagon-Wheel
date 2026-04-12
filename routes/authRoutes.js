@@ -4,6 +4,8 @@ const {
 	signup,
 	login,
 	currentUser,
+	updateProfile,
+	updatePassword,
 	logout,
 	requestPasswordResetOtp,
 	verifyPasswordResetOtp,
@@ -21,6 +23,14 @@ function toFrontendPath(pathname) {
 	}
 
 	return `${base}${pathname}`;
+}
+
+function ensureAuthenticated(req, res, next) {
+	if (!req.isAuthenticated() || !req.user) {
+		return res.status(401).json({ success: false, message: "Not authenticated." });
+	}
+
+	return next();
 }
 
 async function ensureDatabaseConnection(req, res, next) {
@@ -48,6 +58,8 @@ router.use(
 		"/auth/logout",
 		"/auth/google",
 		"/auth/google/callback",
+		"/auth/profile",
+		"/auth/profile/password",
 		"/auth/password/request-otp",
 		"/auth/password/verify-otp",
 		"/auth/password/reset",
@@ -61,6 +73,9 @@ router.post("/auth/password/request-otp", requestPasswordResetOtp);
 router.post("/auth/password/verify-otp", verifyPasswordResetOtp);
 router.post("/auth/password/reset", resetPassword);
 router.get("/auth/me", currentUser);
+router.get("/auth/profile", ensureAuthenticated, currentUser);
+router.put("/auth/profile", ensureAuthenticated, updateProfile);
+router.put("/auth/profile/password", ensureAuthenticated, updatePassword);
 router.post("/auth/logout", logout);
 
 router.get("/auth/google", (req, res, next) => {
