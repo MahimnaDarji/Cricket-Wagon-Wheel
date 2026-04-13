@@ -125,6 +125,11 @@ body {
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.26);
 }
 
+.left-panel .action-btn {
+  width: 100%;
+  max-width: 240px;
+}
+
 .profile-avatar {
   width: 132px;
   height: 132px;
@@ -331,6 +336,25 @@ body {
   background: #2a3640;
 }
 
+.left-panel .action-btn.primary {
+  border-color: #1f4f3a;
+  background: linear-gradient(180deg, #2d6a4f 0%, #245742 100%);
+  color: #f4f8f2;
+}
+
+.left-panel .action-btn.secondary {
+  border-color: #7a5f3b;
+  background: linear-gradient(180deg, #c39a6a 0%, #ab8357 100%);
+  color: #2d261f;
+}
+
+.left-panel .nav-back-btn {
+  min-height: 50px;
+  padding: 0.62rem 1.1rem;
+  font-size: 1rem;
+  letter-spacing: 0.045em;
+}
+
 .action-btn:hover {
   transform: translateY(-1px);
   color: #f6f3e8;
@@ -412,8 +436,15 @@ body {
   height: 72px;
   border-radius: 50%;
   border: 1px solid #8ca08e;
-  background:
-    radial-gradient(circle at center, rgba(198, 213, 193, 0.7) 0 28%, rgba(160, 181, 157, 0.7) 29% 55%, rgba(118, 141, 117, 0.78) 56% 100%);
+  background-color: #4e7953;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  overflow: hidden;
+}
+
+.history-preview.is-rendered {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
 }
 
 .history-actions {

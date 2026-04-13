@@ -48,6 +48,9 @@ const RUN_COLOR_MAP = {
 };
 
 const DEBUG_HISTORY = false;
+const HISTORY_VIEW_RECORD_KEY = "cww_history_view_record_id";
+const HISTORY_AUTO_EXPORT_KEY = "cww_history_auto_export";
+const HISTORY_EXPORT_EVENT = "cww-history-export-ready";
 
 const groundCircle = document.querySelector(".ground-circle");
 const groundStage = document.querySelector(".ground-stage");
@@ -92,6 +95,8 @@ const DEFAULT_AVATAR = `data:image/svg+xml;utf8,${encodeURIComponent(
 
 const state = {
   mode: "individual",
+  isHistoryDetailView: false,
+  viewedInningsSavedAt: "",
   players: [],
   selectedPlayerId: null,
   wagonWheel: {
@@ -118,6 +123,156 @@ let shotArrowLayer = null;
 let lastShotClickSignature = null;
 let exportRootNode = null;
 
+function getHistoryRecordForView() {
+  const requestedId = String(localStorage.getItem(HISTORY_VIEW_RECORD_KEY) || "").trim();
+  if (!requestedId) {
+    return null;
+  }
+
+  const historyList = safeParse(localStorage.getItem("wagonWheelHistory") || "[]");
+  if (!Array.isArray(historyList)) {
+    localStorage.removeItem(HISTORY_VIEW_RECORD_KEY);
+    return null;
+  }
+
+  const selectedRecord = historyList.find((entry) => String(entry?.id || "") === requestedId);
+  localStorage.removeItem(HISTORY_VIEW_RECORD_KEY);
+  return selectedRecord && typeof selectedRecord === "object" ? selectedRecord : null;
+}
+
+function normalizeHistoryGround(record) {
+  const fallbackBoundaries = DEFAULT_BOUNDARY_CONFIG.map((item) => ({
+    name: item.name,
+    value: item.value,
+    label: `${item.value}M`,
+  }));
+
+  const savedBoundaries = Array.isArray(record?.boundaries)
+    ? record.boundaries.map((item, index) => {
+        const fallback = DEFAULT_BOUNDARY_CONFIG[index] || DEFAULT_BOUNDARY_CONFIG[0];
+        const value = Number(item?.value);
+        const finalValue = Number.isFinite(value) ? value : fallback.value;
+        return {
+          name: String(item?.name || fallback.name),
+          value: finalValue,
+          label: String(item?.label || `${Math.round(finalValue)}M`),
+        };
+      })
+    : fallbackBoundaries;
+
+  return {
+    mode: record?.groundMode === "custom" ? "custom" : "preset",
+    stadiumName: String(record?.groundName || "Melbourne Cricket Ground"),
+    boundaries: savedBoundaries,
+  };
+}
+
+function applyHistoryRecordToState(record) {
+  const rosterById = record?.playerRosterNameById && typeof record.playerRosterNameById === "object"
+    ? record.playerRosterNameById
+    : {};
+  const shotsByPlayer = record?.shotsByPlayer && typeof record.shotsByPlayer === "object"
+    ? record.shotsByPlayer
+    : {};
+  const ballsByPlayer = record?.ballsByPlayer && typeof record.ballsByPlayer === "object"
+    ? record.ballsByPlayer
+    : {};
+
+  const preferredPlayerId = String(record?.playerId || "").trim();
+  const availableIds = Array.from(
+    new Set([
+      ...Object.keys(shotsByPlayer),
+      ...Object.keys(ballsByPlayer),
+      ...Object.keys(rosterById),
+    ].filter((value) => String(value || "").trim().length > 0))
+  );
+
+  const selectedHistoryPlayerId = availableIds.includes(preferredPlayerId)
+    ? preferredPlayerId
+    : (availableIds[0] || "player-1");
+
+  const selectedHistoryName = String(
+    rosterById[selectedHistoryPlayerId] || record?.playerName || "Player"
+  ).trim() || "Player";
+
+  state.mode = "individual";
+  state.isHistoryDetailView = true;
+  state.viewedInningsSavedAt = String(record?.savedAt || "");
+  state.players = [normalizePlayer({
+    id: selectedHistoryPlayerId,
+    name: selectedHistoryName,
+    battingStyle: record?.playerBattingStyle || "right",
+    avatar: record?.playerAvatar || "",
+  }, 0)];
+  state.selectedPlayerId = state.players[0].id;
+
+  state.ground = normalizeHistoryGround(record);
+
+  state.wagonWheel.runColors = {
+    ...RUN_COLOR_MAP,
+    ...(record?.runColors && typeof record.runColors === "object" ? record.runColors : {}),
+  };
+
+  const sourceBalls = Array.isArray(ballsByPlayer[selectedHistoryPlayerId])
+    ? ballsByPlayer[selectedHistoryPlayerId]
+    : (Array.isArray(record?.balls) ? record.balls : []);
+
+  state.wagonWheel.inningsBallsByPlayer = {
+    [selectedHistoryPlayerId]: sourceBalls
+      .map((ball, index) => {
+        const run = Number(ball?.run);
+        if (!Number.isInteger(run)) {
+          return null;
+        }
+
+        return {
+          ballNumber: Number.isInteger(Number(ball?.ballNumber)) ? Number(ball.ballNumber) : index + 1,
+          run,
+          color: String(ball?.color || state.wagonWheel.runColors[run] || ""),
+        };
+      })
+      .filter(Boolean),
+  };
+
+  const sourceShots = Array.isArray(shotsByPlayer[selectedHistoryPlayerId])
+    ? shotsByPlayer[selectedHistoryPlayerId]
+    : [];
+
+  state.wagonWheel.shotsByPlayer = {
+    [selectedHistoryPlayerId]: sourceShots
+      .map((shot) => {
+        const runValue = Number(shot?.runValue);
+        if (!Number.isInteger(runValue)) {
+          return null;
+        }
+
+        const start = shot?.start && typeof shot.start === "object" ? shot.start : null;
+        const end = shot?.end && typeof shot.end === "object" ? shot.end : null;
+        if (!start || !end) {
+          return null;
+        }
+
+        return {
+          runValue,
+          color: String(shot?.color || state.wagonWheel.runColors[runValue] || RUN_COLOR_MAP[runValue] || "#f4f2ea"),
+          start: {
+            x: Number(start.x) || 0,
+            y: Number(start.y) || 0,
+            xRatio: Number(start.xRatio),
+            yRatio: Number(start.yRatio),
+          },
+          end: {
+            x: Number(end.x) || 0,
+            y: Number(end.y) || 0,
+            xRatio: Number(end.xRatio),
+            yRatio: Number(end.yRatio),
+          },
+        };
+      })
+      .filter(Boolean),
+  };
+}
+
 function safeParse(jsonValue) {
   try {
     return JSON.parse(jsonValue);
@@ -139,6 +294,14 @@ function normalizePlayer(player, index) {
 }
 
 function loadState() {
+  const historyRecord = getHistoryRecordForView();
+  if (historyRecord) {
+    applyHistoryRecordToState(historyRecord);
+    return;
+  }
+
+  state.isHistoryDetailView = false;
+  state.viewedInningsSavedAt = "";
   const playerSetup = safeParse(localStorage.getItem("playerSetup") || "");
   const groundSetup = safeParse(localStorage.getItem("groundSetup") || "");
   const inningsSetup = safeParse(localStorage.getItem("wagonWheelInnings") || "");
@@ -302,6 +465,70 @@ function loadState() {
         return acc;
       }, {});
     }
+  }
+}
+
+function formatFileDate(value) {
+  const date = new Date(String(value || ""));
+  if (Number.isNaN(date.getTime())) {
+    return "unknown_date";
+  }
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}${month}${day}`;
+}
+
+function shouldAutoDownloadHistoryExport() {
+  const params = new URLSearchParams(window.location.search);
+  const wantsAutoDownload = params.get("autodownload") === "1";
+  const hasExportRequest = localStorage.getItem(HISTORY_AUTO_EXPORT_KEY) === "1";
+  return wantsAutoDownload && hasExportRequest && state.isHistoryDetailView;
+}
+
+function getEmbeddedHistoryExportRequestId() {
+  const params = new URLSearchParams(window.location.search);
+  const mode = String(params.get("exportmode") || "").trim();
+  const requestId = String(params.get("requestId") || "").trim();
+
+  if (mode !== "embedded" || !requestId) {
+    return "";
+  }
+
+  return requestId;
+}
+
+function applyHistoryDetailReadOnlyMode() {
+  if (!state.isHistoryDetailView) {
+    return;
+  }
+
+  state.wagonWheel.enabled = false;
+  state.wagonWheel.selectedRun = null;
+
+  if (downloadExportBlock) {
+    downloadExportBlock.classList.add("is-hidden");
+  }
+
+  if (runSelectionStatus) {
+    runSelectionStatus.textContent = "History detail view: innings data loaded in read-only mode.";
+  }
+
+  if (wagonWheelToggle) {
+    wagonWheelToggle.disabled = true;
+  }
+  if (nextBallButton) {
+    nextBallButton.disabled = true;
+  }
+  if (undoShotButton) {
+    undoShotButton.disabled = true;
+  }
+  if (clearShotsButton) {
+    clearShotsButton.disabled = true;
+  }
+  if (completeInningsButton) {
+    completeInningsButton.disabled = true;
   }
 }
 
@@ -715,6 +942,10 @@ function createExportContainer() {
   const groundWrap = document.createElement("div");
   groundWrap.className = "export-ground-wrap";
   const groundClone = groundCircle.cloneNode(true);
+  groundClone
+    .querySelectorAll(".boundary-overlay, .shot-overlay")
+    .forEach((overlayNode) => overlayNode.remove());
+  const exportShotLayer = createShotArrowLayer(groundClone);
   groundWrap.appendChild(groundClone);
 
   const legend = document.createElement("div");
@@ -748,6 +979,8 @@ function createExportContainer() {
   root.appendChild(summary);
 
   document.body.appendChild(root);
+  const exportGroundRect = groundClone.getBoundingClientRect();
+  renderShotLinesForLayer(exportShotLayer, exportGroundRect, playerShots);
   exportRootNode = root;
   return root;
 }
@@ -766,11 +999,44 @@ async function downloadWagonWheelImage() {
 
   const selected = getSelectedPlayer();
   const safePlayerName = sanitizeFileName(selected?.name || "player");
+  const safeDate = formatFileDate(state.viewedInningsSavedAt || new Date().toISOString());
   const link = document.createElement("a");
-  link.href = canvas.toDataURL("image/png");
-  link.download = `${safePlayerName}_wagon_wheel.png`;
+  link.href = canvas.toDataURL("image/jpeg", 0.92);
+  link.download = `${safePlayerName}_${safeDate}_wagon_wheel.jpg`;
   link.click();
   removeExportRootNode();
+}
+
+async function exportWagonWheelImageDataForHistory(requestId) {
+  if (typeof window.html2canvas !== "function" || !requestId) {
+    return;
+  }
+
+  const exportContainer = createExportContainer();
+  const canvas = await window.html2canvas(exportContainer, {
+    scale: 3,
+    useCORS: true,
+    backgroundColor: null,
+  });
+
+  const selected = getSelectedPlayer();
+  const safePlayerName = sanitizeFileName(selected?.name || "player");
+  const safeDate = formatFileDate(state.viewedInningsSavedAt || new Date().toISOString());
+  const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
+  const fileName = `${safePlayerName}_${safeDate}_wagon_wheel.jpg`;
+  removeExportRootNode();
+
+  if (window.parent && window.parent !== window) {
+    window.parent.postMessage(
+      {
+        type: HISTORY_EXPORT_EVENT,
+        requestId,
+        dataUrl,
+        fileName,
+      },
+      window.location.origin
+    );
+  }
 }
 
 function setupRunSelection() {
@@ -1065,23 +1331,42 @@ function renderShotArrows() {
   }
 
   const groundRect = groundCircle.getBoundingClientRect();
-  shotArrowLayer.setAttribute("viewBox", `0 0 ${groundRect.width} ${groundRect.height}`);
-  shotArrowLayer.innerHTML = "";
-
   const selectedPlayer = getSelectedPlayer();
   const playerId = selectedPlayer?.id || "";
   const playerShots = getPlayerShots(playerId);
 
-  playerShots.forEach((shot, index) => {
+  renderShotLinesForLayer(shotArrowLayer, groundRect, playerShots);
+}
+
+function renderShotLinesForLayer(targetLayer, groundRect, shots) {
+  if (!targetLayer || !groundRect) {
+    return;
+  }
+
+  const width = Number(groundRect.width) || 0;
+  const height = Number(groundRect.height) || 0;
+  if (width <= 0 || height <= 0) {
+    return;
+  }
+
+  targetLayer.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  targetLayer.innerHTML = "";
+
+  shots.forEach((shot, index) => {
     const start = fromNormalizedPoint(shot.start, groundRect);
     const end = fromNormalizedPoint(shot.end, groundRect);
+    const color = String(shot?.color || "");
 
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
     path.classList.add("shot-arrow-path");
     path.dataset.shotIndex = String(index);
     path.setAttribute("d", `M ${start.x} ${start.y} L ${end.x} ${end.y}`);
-    path.setAttribute("stroke", shot.color);
-    shotArrowLayer.appendChild(path);
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", color || RUN_COLOR_MAP[Number(shot?.runValue)] || "#f4f2ea");
+    path.setAttribute("stroke-width", "2.8");
+    path.setAttribute("stroke-linecap", "round");
+    path.setAttribute("opacity", "0.94");
+    targetLayer.appendChild(path);
   });
 }
 
@@ -1355,7 +1640,27 @@ loadState();
 setupRunSelection();
 setupGroundOverlay();
 setupShotCapture();
+applyHistoryDetailReadOnlyMode();
 render();
+
+if (shouldAutoDownloadHistoryExport()) {
+  const embeddedRequestId = getEmbeddedHistoryExportRequestId();
+  localStorage.removeItem(HISTORY_AUTO_EXPORT_KEY);
+
+  if (embeddedRequestId) {
+    window.setTimeout(async () => {
+      await exportWagonWheelImageDataForHistory(embeddedRequestId);
+    }, 120);
+  } else {
+    window.setTimeout(async () => {
+      await downloadWagonWheelImage();
+      if (window.opener) {
+        window.close();
+      }
+    }, 120);
+  }
+}
+
 if (REVIEW_GROUND_OVERLAY_ENABLED) {
   window.addEventListener("resize", rerenderGroundOverlay);
 }

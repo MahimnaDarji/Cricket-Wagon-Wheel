@@ -45,6 +45,8 @@ let activeBoundaryLabels = activeBoundaryValues.map((value) => `${Math.round(val
 let activeBoundaryScale = activeBoundaryValues.map(() => 1);
 let boundaryReplayLayer = null;
 let boundaryReplayRunId = 0;
+let resizeRedrawFrameId = 0;
+let resizeRedrawTimeoutId = 0;
 
 function saveGroundSetup() {
   const payload = {
@@ -208,6 +210,19 @@ function createArrowLayer(stage) {
   return { svg, settledGroup, activePath };
 }
 
+function syncBoundaryOverlayViewport(layer) {
+  if (!layer || !groundCircle) {
+    return;
+  }
+
+  const rect = groundCircle.getBoundingClientRect();
+  const width = Math.max(1, rect.width);
+  const height = Math.max(1, rect.height);
+
+  layer.svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  layer.svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+}
+
 function getGroundGeometry() {
   const circleRect = groundCircle.getBoundingClientRect();
   const creaseRect = strikerCrease?.getBoundingClientRect();
@@ -358,6 +373,7 @@ function animateArrow(layer, path, durationMs, labelIndex, labelText, runId) {
 }
 
 async function playBoundaryArrowsOnce(layer, directions, runId) {
+  syncBoundaryOverlayViewport(layer);
   layer.settledGroup.innerHTML = "";
   layer.activePath.setAttribute("d", "");
   layer.activePath.style.opacity = "0";
@@ -382,6 +398,38 @@ async function playBoundaryArrowsOnce(layer, directions, runId) {
   }
 }
 
+function drawBoundaryArrowsStatic(layer, directions) {
+  if (!layer) {
+    return;
+  }
+
+  syncBoundaryOverlayViewport(layer);
+  layer.settledGroup.innerHTML = "";
+  layer.activePath.setAttribute("d", "");
+  layer.activePath.style.opacity = "0";
+
+  const geometry = getGroundGeometry();
+
+  directions.forEach((directionInfo, index) => {
+    const scaleFactor = activeBoundaryScale[index] ?? 1;
+    const labelText = activeBoundaryLabels[index] || "";
+
+    if (scaleFactor <= 0 || labelText.length === 0) {
+      return;
+    }
+
+    const path = buildArrowPath(geometry, directionInfo.angle, scaleFactor);
+    const settledPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    settledPath.classList.add("boundary-arrow-path");
+    settledPath.setAttribute("d", toLinePath(path));
+    settledPath.setAttribute("marker-end", "url(#boundary-arrow-head)");
+    layer.settledGroup.appendChild(settledPath);
+
+    const label = createBoundaryLabel(path, index, labelText);
+    layer.settledGroup.appendChild(label);
+  });
+}
+
 function rerenderBoundaryReplay() {
   if (!boundaryReplayLayer) {
     return;
@@ -390,6 +438,35 @@ function rerenderBoundaryReplay() {
   boundaryReplayRunId += 1;
   const runId = boundaryReplayRunId;
   playBoundaryArrowsOnce(boundaryReplayLayer, boundaryFieldConfig, runId);
+}
+
+function redrawBoundaryReplayOnResize() {
+  if (!boundaryReplayLayer) {
+    return;
+  }
+
+  boundaryReplayRunId += 1;
+  drawBoundaryArrowsStatic(boundaryReplayLayer, boundaryFieldConfig);
+}
+
+function scheduleResponsiveBoundaryReflow() {
+  if (resizeRedrawFrameId) {
+    cancelAnimationFrame(resizeRedrawFrameId);
+  }
+
+  if (resizeRedrawTimeoutId) {
+    window.clearTimeout(resizeRedrawTimeoutId);
+  }
+
+  resizeRedrawFrameId = requestAnimationFrame(() => {
+    resizeRedrawFrameId = 0;
+    redrawBoundaryReplayOnResize();
+  });
+
+  resizeRedrawTimeoutId = window.setTimeout(() => {
+    resizeRedrawTimeoutId = 0;
+    redrawBoundaryReplayOnResize();
+  }, 70);
 }
 
 function clearRenderedArrows() {
@@ -409,6 +486,7 @@ function setupBoundaryReplay() {
   }
 
   boundaryReplayLayer = createArrowLayer(groundCircle);
+  syncBoundaryOverlayViewport(boundaryReplayLayer);
   rerenderBoundaryReplay();
 }
 
@@ -517,3 +595,4 @@ syncInputsFromPreset();
 updateBoundaryStateFromMode();
 updateLiveArea();
 setupBoundaryReplay();
+window.addEventListener("resize", scheduleResponsiveBoundaryReflow);

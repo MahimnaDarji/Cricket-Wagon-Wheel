@@ -24,8 +24,24 @@ const DEFAULT_AVATAR = `data:image/svg+xml;utf8,${encodeURIComponent(
   </svg>`
 )}`;
 
+const HISTORY_VIEW_RECORD_KEY = "cww_history_view_record_id";
+const HISTORY_AUTO_EXPORT_KEY = "cww_history_auto_export";
+const HISTORY_EXPORT_EVENT = "cww-history-export-ready";
+
+const PREVIEW_RUN_FALLBACK_COLORS = Object.freeze({
+  1: "#1d4ed8",
+  2: "#facc15",
+  3: "#ffffff",
+  4: "#f97316",
+  5: "#7c3aed",
+  6: "#ef4444",
+});
+
+const PREVIEW_SHOT_START = Object.freeze({ xRatio: 0.5, yRatio: 0.363 });
+
 let currentUser = null;
 let currentProfileImageUrl = "";
+const historyPreviewCache = new Map();
 
 function setFeedback(type, messages) {
   profileFeedback.className = `feedback ${type}`;
@@ -70,6 +86,193 @@ function formatDate(value) {
     month: "short",
     day: "numeric",
   });
+}
+
+function clamp01(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(1, numeric));
+}
+
+function toPreviewRatio(point) {
+  if (!point || typeof point !== "object") {
+    return null;
+  }
+
+  const hasRatios = Number.isFinite(Number(point.xRatio)) && Number.isFinite(Number(point.yRatio));
+  if (hasRatios) {
+    return {
+      xRatio: clamp01(point.xRatio),
+      yRatio: clamp01(point.yRatio),
+    };
+  }
+
+  const x = Number(point.x);
+  const y = Number(point.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    return null;
+  }
+
+  if (x >= 0 && x <= 1.2 && y >= 0 && y <= 1.2) {
+    return {
+      xRatio: clamp01(x),
+      yRatio: clamp01(y),
+    };
+  }
+
+  return null;
+}
+
+function extractPreviewShots(entry) {
+  if (!entry || typeof entry !== "object") {
+    return [];
+  }
+
+  const shotsByPlayer = entry.shotsByPlayer;
+  if (!shotsByPlayer || typeof shotsByPlayer !== "object") {
+    return [];
+  }
+
+  return Object.values(shotsByPlayer)
+    .flatMap((playerShots) => (Array.isArray(playerShots) ? playerShots : []))
+    .map((shot) => {
+      const runValue = Number(shot?.runValue);
+      if (!Number.isInteger(runValue)) {
+        return null;
+      }
+
+      const start = toPreviewRatio(shot?.start);
+      const end = toPreviewRatio(shot?.end);
+      if (!start || !end) {
+        return null;
+      }
+
+      const runColor = entry?.runColors && typeof entry.runColors === "object"
+        ? entry.runColors[runValue]
+        : "";
+
+      const color = String(shot?.color || runColor || PREVIEW_RUN_FALLBACK_COLORS[runValue] || "#f4f2ea");
+
+      return {
+        runValue,
+        color,
+        start,
+        end,
+      };
+    })
+    .filter(Boolean);
+}
+
+function renderHistoryPreviewDataUrl(entryId, entry, size = 84) {
+  const safeSize = Math.max(32, Math.round(Number(size) || 84));
+  const cacheKey = `${entryId}:${safeSize}`;
+  if (historyPreviewCache.has(cacheKey)) {
+    return historyPreviewCache.get(cacheKey);
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = safeSize;
+  canvas.height = safeSize;
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    return "";
+  }
+
+  const center = safeSize / 2;
+  const radius = safeSize * 0.47;
+  const shots = extractPreviewShots(entry);
+
+  context.clearRect(0, 0, safeSize, safeSize);
+
+  context.save();
+  context.beginPath();
+  context.arc(center, center, radius, 0, Math.PI * 2);
+  context.clip();
+
+  const fieldGradient = context.createRadialGradient(center, center, radius * 0.2, center, center, radius);
+  fieldGradient.addColorStop(0, "#6f9d73");
+  fieldGradient.addColorStop(0.62, "#4a7750");
+  fieldGradient.addColorStop(1, "#355d3b");
+  context.fillStyle = fieldGradient;
+  context.fillRect(0, 0, safeSize, safeSize);
+
+  context.strokeStyle = "rgba(244, 242, 234, 0.32)";
+  context.lineWidth = 1.2;
+  context.beginPath();
+  context.arc(center, center, radius * 0.73, 0, Math.PI * 2);
+  context.stroke();
+
+  context.beginPath();
+  context.arc(center, center, radius * 0.45, 0, Math.PI * 2);
+  context.stroke();
+
+  const pitchWidth = radius * 0.34;
+  const pitchHeight = radius * 1.28;
+  const pitchX = center - (pitchWidth / 2);
+  const pitchY = center - (pitchHeight * 0.58);
+  const pitchGradient = context.createLinearGradient(pitchX, pitchY, pitchX, pitchY + pitchHeight);
+  pitchGradient.addColorStop(0, "#b79463");
+  pitchGradient.addColorStop(1, "#8a6b46");
+  context.fillStyle = pitchGradient;
+  context.fillRect(pitchX, pitchY, pitchWidth, pitchHeight);
+
+  context.strokeStyle = "rgba(244, 242, 234, 0.68)";
+  context.lineWidth = 0.9;
+  const creaseYTop = pitchY + 4;
+  const creaseYBottom = pitchY + pitchHeight - 4;
+  context.beginPath();
+  context.moveTo(pitchX + 2, creaseYTop);
+  context.lineTo(pitchX + pitchWidth - 2, creaseYTop);
+  context.moveTo(pitchX + 2, creaseYBottom);
+  context.lineTo(pitchX + pitchWidth - 2, creaseYBottom);
+  context.stroke();
+
+  shots.forEach((shot) => {
+    const startX = shot.start.xRatio * safeSize;
+    const startY = shot.start.yRatio * safeSize;
+    const endX = shot.end.xRatio * safeSize;
+    const endY = shot.end.yRatio * safeSize;
+
+    context.strokeStyle = shot.color;
+    context.lineWidth = shot.runValue === 4 || shot.runValue === 6 ? 2.15 : 1.55;
+    context.lineCap = "round";
+    context.beginPath();
+    context.moveTo(startX, startY);
+    context.lineTo(endX, endY);
+    context.stroke();
+
+    context.fillStyle = shot.color;
+    context.beginPath();
+    context.arc(endX, endY, 1.5, 0, Math.PI * 2);
+    context.fill();
+  });
+
+  context.fillStyle = "rgba(244, 242, 234, 0.86)";
+  context.beginPath();
+  context.arc(PREVIEW_SHOT_START.xRatio * safeSize, PREVIEW_SHOT_START.yRatio * safeSize, 1.8, 0, Math.PI * 2);
+  context.fill();
+
+  context.restore();
+
+  context.strokeStyle = "#7f9683";
+  context.lineWidth = 1;
+  context.beginPath();
+  context.arc(center, center, radius, 0, Math.PI * 2);
+  context.stroke();
+
+  const imageUrl = canvas.toDataURL("image/png");
+  historyPreviewCache.set(cacheKey, imageUrl);
+  return imageUrl;
+}
+
+function applyHistoryPreview(previewElement, entry) {
+  const previewUrl = renderHistoryPreviewDataUrl(entry.id, entry.raw);
+  previewElement.classList.add("is-rendered");
+  previewElement.style.backgroundImage = previewUrl ? `url(${previewUrl})` : "none";
 }
 
 function getHistoryEntries() {
@@ -203,19 +406,61 @@ function deleteHistoryEntry(entryId) {
 }
 
 function downloadHistoryEntry(entry) {
-  const blob = new Blob([JSON.stringify(entry.raw, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  const safeName = String(entry.playerName || "player")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "") || "player";
+  localStorage.setItem(HISTORY_VIEW_RECORD_KEY, entry.id);
+  localStorage.setItem(HISTORY_AUTO_EXPORT_KEY, "1");
 
-  link.href = url;
-  link.download = `${safeName}_innings.json`;
-  link.click();
-  URL.revokeObjectURL(url);
+  const requestId = `history-export-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "fixed";
+  iframe.style.width = "1px";
+  iframe.style.height = "1px";
+  iframe.style.border = "0";
+  iframe.style.opacity = "0";
+  iframe.style.pointerEvents = "none";
+  iframe.setAttribute("aria-hidden", "true");
+
+  let isHandled = false;
+
+  const cleanup = () => {
+    window.removeEventListener("message", onMessage);
+    if (iframe.parentNode) {
+      iframe.parentNode.removeChild(iframe);
+    }
+    localStorage.removeItem(HISTORY_AUTO_EXPORT_KEY);
+  };
+
+  const onMessage = (event) => {
+    if (event.origin !== window.location.origin) {
+      return;
+    }
+
+    const payload = event.data;
+    if (!payload || payload.type !== HISTORY_EXPORT_EVENT || payload.requestId !== requestId) {
+      return;
+    }
+
+    isHandled = true;
+
+    if (typeof payload.dataUrl === "string" && payload.dataUrl.startsWith("data:image/jpeg")) {
+      const link = document.createElement("a");
+      link.href = payload.dataUrl;
+      link.download = String(payload.fileName || "wagon_wheel.jpg");
+      link.click();
+    }
+
+    cleanup();
+  };
+
+  window.addEventListener("message", onMessage);
+
+  window.setTimeout(() => {
+    if (!isHandled) {
+      cleanup();
+    }
+  }, 15000);
+
+  iframe.src = `review.html?source=history&autodownload=1&exportmode=embedded&requestId=${encodeURIComponent(requestId)}`;
+  document.body.appendChild(iframe);
 }
 
 function renderHistory() {
@@ -252,6 +497,7 @@ function renderHistory() {
     const preview = document.createElement("div");
     preview.className = "history-preview";
     preview.setAttribute("aria-hidden", "true");
+    applyHistoryPreview(preview, entry);
 
     top.appendChild(left);
     top.appendChild(preview);
@@ -268,8 +514,8 @@ function renderHistory() {
     viewButton.className = "action-btn secondary";
     viewButton.textContent = "View";
     viewButton.addEventListener("click", () => {
-      localStorage.setItem("wagonWheelInnings", JSON.stringify(entry.raw));
-      window.location.href = "review.html";
+      localStorage.setItem(HISTORY_VIEW_RECORD_KEY, entry.id);
+      window.location.href = "review.html?source=history";
     });
 
     const downloadButton = document.createElement("button");
