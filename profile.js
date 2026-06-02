@@ -1,3 +1,46 @@
+
+const PROFILE_PITCH_OUTCOME_COLORS = {
+  Dot: "#FF0054",
+  Run: "#005F73",
+  Boundary: "#E8A838",
+  Wicket: "#2D00F7"
+};
+
+function renderPitchMapHistoryPreview(preview, record) {
+  if (!preview || !record) {
+    return;
+  }
+
+  const deliveries = Array.isArray(record.deliveries) ? record.deliveries : [];
+
+  preview.innerHTML = "";
+  preview.classList.add("is-rendered", "pitch-history-preview");
+  preview.style.position = "relative";
+  preview.style.overflow = "hidden";
+  preview.style.borderRadius = "8px";
+  preview.style.backgroundImage = "url(assets/pitch-map-base.png?v=final)";
+  preview.style.backgroundSize = "contain";
+  preview.style.backgroundPosition = "center";
+  preview.style.backgroundRepeat = "no-repeat";
+
+  deliveries.forEach((delivery) => {
+    const x = Number(delivery.wrapperX);
+    const y = Number(delivery.wrapperY);
+
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      return;
+    }
+
+    const dot = document.createElement("span");
+    dot.className = "profile-pitch-delivery-dot";
+    dot.style.left = x + "%";
+    dot.style.top = y + "%";
+    dot.style.background = PROFILE_PITCH_OUTCOME_COLORS[delivery.outcome] || "#FF0054";
+
+    preview.appendChild(dot);
+  });
+}
+
 const profileForm = document.getElementById("profile-form");
 const profileNameInput = document.getElementById("profile-name");
 const profileEmailInput = document.getElementById("profile-email");
@@ -276,7 +319,7 @@ function applyHistoryPreview(previewElement, entry) {
 }
 
 function getHistoryEntries() {
-  const storedHistory = (() => {
+  const wagonHistory = (() => {
     try {
       const raw = localStorage.getItem("wagonWheelHistory");
       const parsed = raw ? JSON.parse(raw) : [];
@@ -286,113 +329,179 @@ function getHistoryEntries() {
     }
   })();
 
-  return storedHistory
-    .map((entry) => {
-      const ballsByPlayer = entry?.ballsByPlayer && typeof entry.ballsByPlayer === "object" ? entry.ballsByPlayer : {};
-      const playerNames = entry?.playerRosterNameById && typeof entry.playerRosterNameById === "object"
-        ? entry.playerRosterNameById
-        : {};
+  const pitchMapHistory = (() => {
+    try {
+      const raw = localStorage.getItem("pitchMapHistory") || localStorage.getItem("creasevisionPitchMapHistory");
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  })();
 
-      const computedFromBalls = (() => {
-        let runs = 0;
-        let balls = 0;
+  const wagonEntries = wagonHistory.map((entry, index) => {
+    const ballsByPlayer = entry?.ballsByPlayer && typeof entry.ballsByPlayer === "object" ? entry.ballsByPlayer : {};
+    const playerNames = entry?.playerRosterNameById && typeof entry.playerRosterNameById === "object"
+      ? entry.playerRosterNameById
+      : {};
 
-        Object.values(ballsByPlayer).forEach((playerBalls) => {
-          if (!Array.isArray(playerBalls)) {
-            return;
-          }
+    const computedFromBalls = (() => {
+      let runs = 0;
+      let balls = 0;
 
-          balls += playerBalls.length;
-          runs += playerBalls.reduce((sum, ball) => sum + (Number(ball?.run) || 0), 0);
-        });
+      Object.values(ballsByPlayer).forEach((playerBalls) => {
+        if (!Array.isArray(playerBalls)) return;
+        balls += playerBalls.length;
+        runs += playerBalls.reduce((sum, ball) => sum + (Number(ball?.run) || 0), 0);
+      });
 
-        return { runs, balls };
-      })();
+      return { runs, balls };
+    })();
 
-      const computedFromRunsSequence = (() => {
-        if (!Array.isArray(entry?.runsSequence)) {
-          return { runs: 0, balls: 0 };
-        }
+    const computedFromRunsSequence = (() => {
+      if (!Array.isArray(entry?.runsSequence)) {
+        return { runs: 0, balls: 0 };
+      }
 
-        const runs = entry.runsSequence.reduce((sum, value) => sum + (Number(value) || 0), 0);
-        return {
-          runs,
-          balls: entry.runsSequence.length,
-        };
-      })();
-
-      const computedFromShots = (() => {
-        if (!entry?.shotsByPlayer || typeof entry.shotsByPlayer !== "object") {
-          return { runs: 0, balls: 0 };
-        }
-
-        let runs = 0;
-        let balls = 0;
-        Object.values(entry.shotsByPlayer).forEach((shots) => {
-          if (!Array.isArray(shots)) {
-            return;
-          }
-
-          balls += shots.length;
-          runs += shots.reduce((sum, shot) => sum + (Number(shot?.runValue) || 0), 0);
-        });
-
-        return { runs, balls };
-      })();
-
-      const runs = Number.isFinite(Number(entry?.totalRuns))
-        ? Number(entry.totalRuns)
-        : (computedFromRunsSequence.balls > 0
-          ? computedFromRunsSequence.runs
-          : (computedFromShots.balls > computedFromBalls.balls ? computedFromShots.runs : computedFromBalls.runs));
-      const balls = Number.isFinite(Number(entry?.totalBalls))
-        ? Number(entry.totalBalls)
-        : (computedFromRunsSequence.balls > 0
-          ? computedFromRunsSequence.balls
-          : Math.max(computedFromBalls.balls, computedFromShots.balls));
-
-      const displayPlayerName = (() => {
-        if (entry?.playerName) {
-          return String(entry.playerName);
-        }
-
-        const rosterNames = Object.values(playerNames).filter((value) => String(value || "").trim().length > 0);
-        if (rosterNames.length === 1) {
-          return String(rosterNames[0]);
-        }
-
-        if (rosterNames.length > 1) {
-          return "Team Innings";
-        }
-
-        return "Player";
-      })();
-
+      const runs = entry.runsSequence.reduce((sum, value) => sum + (Number(value) || 0), 0);
       return {
-        id: String(entry?.id || entry?.savedAt || `${displayPlayerName}-${runs}-${balls}`),
-        playerName: displayPlayerName,
-        runs: Math.max(0, runs),
-        balls: Math.max(0, balls),
-        savedAt: entry?.savedAt || "",
-        raw: entry,
+        runs,
+        balls: entry.runsSequence.length,
       };
-    })
-    .sort((a, b) => {
-      const aTime = Date.parse(String(a.savedAt || ""));
-      const bTime = Date.parse(String(b.savedAt || ""));
-      return (Number.isFinite(bTime) ? bTime : 0) - (Number.isFinite(aTime) ? aTime : 0);
-    });
+    })();
+
+    const computedFromShots = (() => {
+      if (!entry?.shotsByPlayer || typeof entry.shotsByPlayer !== "object") {
+        return { runs: 0, balls: 0 };
+      }
+
+      let runs = 0;
+      let balls = 0;
+
+      Object.values(entry.shotsByPlayer).forEach((shots) => {
+        if (!Array.isArray(shots)) return;
+        balls += shots.length;
+        runs += shots.reduce((sum, shot) => sum + (Number(shot?.runValue) || 0), 0);
+      });
+
+      return { runs, balls };
+    })();
+
+    const runs = Number.isFinite(Number(entry?.totalRuns))
+      ? Number(entry.totalRuns)
+      : (computedFromRunsSequence.balls > 0
+        ? computedFromRunsSequence.runs
+        : (computedFromShots.balls > computedFromBalls.balls ? computedFromShots.runs : computedFromBalls.runs));
+
+    const balls = Number.isFinite(Number(entry?.totalBalls))
+      ? Number(entry.totalBalls)
+      : (computedFromRunsSequence.balls > 0
+        ? computedFromRunsSequence.balls
+        : Math.max(computedFromBalls.balls, computedFromShots.balls));
+
+    const displayPlayerName = (() => {
+      if (entry?.playerName) return String(entry.playerName);
+
+      const rosterNames = Object.values(playerNames).filter((value) => String(value || "").trim().length > 0);
+      if (rosterNames.length === 1) return String(rosterNames[0]);
+      if (rosterNames.length > 1) return "Team Innings";
+
+      return "Player";
+    })();
+
+    return {
+      id: String(entry?.id || entry?.savedAt || `${displayPlayerName}-${runs}-${balls}`),
+      type: "wagon",
+      playerName: displayPlayerName,
+      title: `Wagon Wheel ${index + 1}`,
+      statsText: `${Math.max(0, runs)} Runs | ${Math.max(0, balls)} Balls`,
+      savedAt: entry?.savedAt || "",
+      raw: entry,
+    };
+  });
+
+  const pitchEntries = pitchMapHistory.map((entry, index) => {
+    const totalDeliveries = Number(entry?.totalDeliveries) || (Array.isArray(entry?.deliveries) ? entry.deliveries.length : 0);
+    const dotBalls = Number(entry?.dotBalls) || (Array.isArray(entry?.deliveries) ? entry.deliveries.filter((delivery) => delivery?.outcome === "Dot").length : 0);
+    const wickets = Number(entry?.wickets) || 0;
+    const bowlerName = String(entry?.bowlerName || "Bowler");
+
+    return {
+      id: String(entry?.id || entry?.savedAt || `pitch-map-${bowlerName}-${totalDeliveries}`),
+      type: "pitch",
+      playerName: bowlerName,
+      title: `Pitch Map ${index + 1}`,
+      statsText: `${totalDeliveries} Deliveries | ${dotBalls} Dot Balls | ${wickets} Wickets`,
+      savedAt: entry?.savedAt || "",
+      raw: entry,
+    };
+  });
+
+  return [...wagonEntries, ...pitchEntries].sort((a, b) => {
+    const aTime = Date.parse(String(a.savedAt || ""));
+    const bTime = Date.parse(String(b.savedAt || ""));
+    return (Number.isFinite(bTime) ? bTime : 0) - (Number.isFinite(aTime) ? aTime : 0);
+  });
 }
 
-function deleteHistoryEntry(entryId) {
-  const confirmed = window.confirm("Delete this innings history entry?");
-  if (!confirmed) {
-    return;
-  }
+function showCreaseVisionConfirm(message, onConfirm) {
+  const existing = document.getElementById("creasevision-confirm-modal");
+  if (existing) existing.remove();
+
+  const backdrop = document.createElement("div");
+  backdrop.id = "creasevision-confirm-modal";
+  backdrop.className = "cv-confirm-backdrop";
+
+  const modal = document.createElement("div");
+  modal.className = "cv-confirm-modal";
+
+  const title = document.createElement("h3");
+  title.textContent = "CreaseVision";
+
+  const text = document.createElement("p");
+  text.textContent = message;
+
+  const actions = document.createElement("div");
+  actions.className = "cv-confirm-actions";
+
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.className = "action-btn secondary";
+  cancelButton.textContent = "Cancel";
+
+  const okButton = document.createElement("button");
+  okButton.type = "button";
+  okButton.className = "action-btn primary";
+  okButton.textContent = "OK";
+
+  cancelButton.addEventListener("click", () => backdrop.remove());
+  backdrop.addEventListener("click", (event) => {
+    if (event.target === backdrop) backdrop.remove();
+  });
+
+  okButton.addEventListener("click", () => {
+    backdrop.remove();
+    onConfirm();
+  });
+
+  actions.appendChild(cancelButton);
+  actions.appendChild(okButton);
+  modal.appendChild(title);
+  modal.appendChild(text);
+  modal.appendChild(actions);
+  backdrop.appendChild(modal);
+  document.body.appendChild(backdrop);
+}
+
+function deleteHistoryEntry(entryId, entryType = "wagon") {
+  showCreaseVisionConfirm("Delete this history entry?", () => {
+
+  const storageKey = entryType === "pitch" ? "pitchMapHistory" : "wagonWheelHistory";
+  const mirrorKey = entryType === "pitch" ? "creasevisionPitchMapHistory" : "";
 
   const nextHistory = (() => {
     try {
-      const raw = localStorage.getItem("wagonWheelHistory");
+      const raw = localStorage.getItem(storageKey);
       const parsed = raw ? JSON.parse(raw) : [];
       const list = Array.isArray(parsed) ? parsed : [];
       return list.filter((entry) => String(entry?.id || "") !== String(entryId || ""));
@@ -401,8 +510,13 @@ function deleteHistoryEntry(entryId) {
     }
   })();
 
-  localStorage.setItem("wagonWheelHistory", JSON.stringify(nextHistory));
+  localStorage.setItem(storageKey, JSON.stringify(nextHistory));
+  if (mirrorKey) {
+    localStorage.setItem(mirrorKey, JSON.stringify(nextHistory));
+  }
+
   renderHistory();
+  });
 }
 
 function downloadHistoryEntry(entry) {
@@ -470,7 +584,7 @@ function renderHistory() {
   if (entries.length === 0) {
     const empty = document.createElement("div");
     empty.className = "history-empty";
-    empty.textContent = "No innings history yet. Complete an innings in Review to see cards here.";
+    empty.textContent = "No history yet. Complete a wagon wheel innings or pitch map to see cards here.";
     historyList.appendChild(empty);
     return;
   }
@@ -485,7 +599,7 @@ function renderHistory() {
     const left = document.createElement("div");
     const player = document.createElement("p");
     player.className = "history-player";
-    player.textContent = entry.playerName;
+    player.textContent = entry.title || entry.playerName;
 
     const date = document.createElement("p");
     date.className = "history-date";
@@ -497,14 +611,18 @@ function renderHistory() {
     const preview = document.createElement("div");
     preview.className = "history-preview";
     preview.setAttribute("aria-hidden", "true");
-    applyHistoryPreview(preview, entry);
+    if (entry.type === "pitch") {
+      renderPitchMapHistoryPreview(preview, entry.raw || entry);
+    } else {
+      applyHistoryPreview(preview, entry);
+    }
 
     top.appendChild(left);
     top.appendChild(preview);
 
     const stats = document.createElement("p");
     stats.className = "history-stats";
-    stats.textContent = `${entry.runs} Runs | ${entry.balls} Balls`;
+    stats.textContent = entry.statsText;
 
     const actions = document.createElement("div");
     actions.className = "history-actions";
@@ -514,6 +632,12 @@ function renderHistory() {
     viewButton.className = "action-btn secondary";
     viewButton.textContent = "View";
     viewButton.addEventListener("click", () => {
+      if (entry.type === "pitch") {
+        localStorage.setItem("pitch_map_history_view_record_id", entry.id);
+        window.location.href = "pitch-map.html?source=history";
+        return;
+      }
+
       localStorage.setItem(HISTORY_VIEW_RECORD_KEY, entry.id);
       window.location.href = "review.html?source=history";
     });
@@ -523,6 +647,12 @@ function renderHistory() {
     downloadButton.className = "action-btn secondary";
     downloadButton.textContent = "Download";
     downloadButton.addEventListener("click", () => {
+      if (entry.type === "pitch") {
+        localStorage.setItem("pitch_map_history_view_record_id", entry.id);
+        window.location.href = "pitch-map.html?source=history";
+        return;
+      }
+
       downloadHistoryEntry(entry);
     });
 
@@ -531,7 +661,7 @@ function renderHistory() {
     deleteButton.className = "action-btn secondary";
     deleteButton.textContent = "Delete";
     deleteButton.addEventListener("click", () => {
-      deleteHistoryEntry(entry.id);
+      deleteHistoryEntry(entry.id, entry.type);
     });
 
     actions.appendChild(viewButton);
@@ -564,6 +694,163 @@ function setupTabs() {
       }
     });
   });
+}
+
+
+function getCreaseVisionLatestProfileForBowlerSync() {
+  const sources = [
+    localStorage.getItem("cww_session_user"),
+    localStorage.getItem("creasevisionUserProfile"),
+    localStorage.getItem("currentUser")
+  ];
+
+  for (const source of sources) {
+    try {
+      const parsed = source ? JSON.parse(source) : null;
+      if (parsed && typeof parsed === "object") {
+        return {
+          name: String(parsed.name || ""),
+          email: String(parsed.email || ""),
+          profileImageUrl: String(parsed.profileImageUrl || "")
+        };
+      }
+    } catch {}
+  }
+
+  return {
+    name: localStorage.getItem("profileName") || "",
+    email: localStorage.getItem("profileEmail") || "",
+    profileImageUrl: localStorage.getItem("profileImageUrl") || ""
+  };
+}
+
+function syncCreaseVisionBowlerStorageWithProfile() {
+  const profile = getCreaseVisionLatestProfileForBowlerSync();
+  const profileName = String(profile.name || "").trim();
+  const profileImageUrl = String(profile.profileImageUrl || "").trim();
+
+  if (!profileName && !profileImageUrl) {
+    return null;
+  }
+
+  let bowlers = [];
+
+  try {
+    const parsed = JSON.parse(localStorage.getItem("creasevisionBowlers") || "[]");
+    bowlers = Array.isArray(parsed) ? parsed : [];
+  } catch {
+    bowlers = [];
+  }
+
+  let selectedIndex = Number(localStorage.getItem("creasevisionSelectedBowlerIndex") || "0");
+  if (!Number.isInteger(selectedIndex) || selectedIndex < 0) {
+    selectedIndex = 0;
+  }
+
+  const existing = bowlers[selectedIndex] || {};
+
+  bowlers[selectedIndex] = {
+    ...existing,
+    id: String(existing.id || "bowler-1"),
+    name: profileName || String(existing.name || "Bowler"),
+    style: String(existing.style || "Right Arm Bowler"),
+    avatar: profileImageUrl || String(existing.avatar || "")
+  };
+
+  localStorage.setItem("creasevisionBowlers", JSON.stringify(bowlers));
+  localStorage.setItem("creasevisionSelectedBowlerIndex", String(selectedIndex));
+
+  return bowlers[selectedIndex];
+}
+
+
+function syncAnalysisSetupIdentityFromProfile(profile) {
+  if (!profile || typeof profile !== "object") return;
+
+  const profileName = String(profile.name || "").trim();
+  const profileAvatar = String(profile.profileImageUrl || "").trim();
+
+  if (!profileName && !profileAvatar) return;
+
+  let playerSetup = {};
+  try {
+    playerSetup = JSON.parse(localStorage.getItem("playerSetup") || "{}");
+  } catch {
+    playerSetup = {};
+  }
+
+  const existingPlayers = Array.isArray(playerSetup.players) ? playerSetup.players : [];
+  const firstPlayer = existingPlayers[0] || {};
+
+  const updatedPlayer = {
+    ...firstPlayer,
+    id: String(firstPlayer.id || "player-1"),
+    name: profileName || String(firstPlayer.name || "Player 1"),
+    battingStyle: String(firstPlayer.battingStyle || "right"),
+    avatar: profileAvatar || String(firstPlayer.avatar || "")
+  };
+
+  const updatedPlayers = existingPlayers.length > 0
+    ? [updatedPlayer, ...existingPlayers.slice(1)]
+    : [updatedPlayer];
+
+  const updatedPlayerSetup = {
+    ...playerSetup,
+    mode: playerSetup.mode === "team" ? "team" : "individual",
+    players: updatedPlayers,
+    confirmedAt: new Date().toISOString()
+  };
+
+  localStorage.setItem("playerSetup", JSON.stringify(updatedPlayerSetup));
+
+  let bowlers = [];
+  try {
+    const parsed = JSON.parse(localStorage.getItem("creasevisionBowlers") || "[]");
+    bowlers = Array.isArray(parsed) ? parsed : [];
+  } catch {
+    bowlers = [];
+  }
+
+  const firstBowler = bowlers[0] || {};
+
+  const updatedBowler = {
+    ...firstBowler,
+    id: String(firstBowler.id || "bowler-1"),
+    name: profileName || String(firstBowler.name || "Bowler"),
+    style: String(firstBowler.style || "Right Arm Bowler"),
+    avatar: profileAvatar || String(firstBowler.avatar || "")
+  };
+
+  localStorage.setItem("creasevisionBowlerMode", "individual");
+  localStorage.setItem("creasevisionSelectedBowlerIndex", "0");
+  localStorage.setItem("creasevisionBowlers", JSON.stringify([updatedBowler]));
+}
+
+function persistProfileEverywhere(user) {
+  if (!user || typeof user !== "object") return;
+
+  const normalized = {
+    id: String(user.id || currentUser?.id || "static-user"),
+    name: String(user.name || ""),
+    email: String(user.email || ""),
+    profileImageUrl: String(user.profileImageUrl || ""),
+    savedAt: new Date().toISOString()
+  };
+
+  localStorage.setItem("cww_session_user", JSON.stringify(normalized));
+  localStorage.setItem("creasevisionUserProfile", JSON.stringify(normalized));
+  localStorage.setItem("currentUser", JSON.stringify(normalized));
+  localStorage.setItem("profileName", normalized.name);
+  localStorage.setItem("profileEmail", normalized.email);
+  localStorage.setItem("profileImageUrl", normalized.profileImageUrl);
+
+  syncAnalysisSetupIdentityFromProfile(normalized);
+
+  syncCreaseVisionBowlerStorageWithProfile();
+
+  window.dispatchEvent(new CustomEvent("creasevision-profile-updated", {
+    detail: normalized
+  }));
 }
 
 function renderSummary() {
@@ -706,4 +993,67 @@ document.addEventListener("DOMContentLoaded", async () => {
   bindProfileSave();
   await loadUserProfile();
   renderHistory();
+});
+
+
+function syncProfileIdentityIntoSetupsFinal() {
+  const nameInput = document.getElementById("profile-name");
+  const imageValue = typeof currentProfileImageUrl !== "undefined" ? currentProfileImageUrl : localStorage.getItem("profileImageUrl");
+
+  const name = String(nameInput?.value || localStorage.getItem("profileName") || "").trim();
+  const avatar = String(imageValue || "").trim();
+
+  if (!name && !avatar) return;
+
+  const userPayload = {
+    id: "static-user",
+    name,
+    email: String(document.getElementById("profile-email")?.value || localStorage.getItem("profileEmail") || "").trim(),
+    profileImageUrl: avatar,
+    savedAt: new Date().toISOString()
+  };
+
+  localStorage.setItem("cww_session_user", JSON.stringify(userPayload));
+  localStorage.setItem("creasevisionUserProfile", JSON.stringify(userPayload));
+  localStorage.setItem("currentUser", JSON.stringify(userPayload));
+  localStorage.setItem("profileName", name);
+  localStorage.setItem("profileImageUrl", avatar);
+
+  const playerSetup = {
+    mode: "individual",
+    players: [
+      {
+        id: "player-1",
+        name,
+        battingStyle: "right",
+        avatar
+      }
+    ],
+    confirmedAt: new Date().toISOString()
+  };
+
+  const bowlerSetup = [
+    {
+      id: "bowler-1",
+      name,
+      style: "Right Arm Bowler",
+      avatar
+    }
+  ];
+
+  localStorage.setItem("playerSetup", JSON.stringify(playerSetup));
+  localStorage.setItem("creasevisionBowlerMode", "individual");
+  localStorage.setItem("creasevisionSelectedBowlerIndex", "0");
+  localStorage.setItem("creasevisionBowlers", JSON.stringify(bowlerSetup));
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const form = document.getElementById("profile-form");
+
+  if (form) {
+    form.addEventListener("submit", () => {
+      window.setTimeout(syncProfileIdentityIntoSetupsFinal, 50);
+      window.setTimeout(syncProfileIdentityIntoSetupsFinal, 250);
+    }, true);
+  }
 });

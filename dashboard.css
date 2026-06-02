@@ -622,3 +622,10 @@ button {
   }
 }
 
+
+#preset-controls .setup-label,
+.setup-block[aria-label="Stadium mode selection"] .setup-label,
+.setup-block[aria-label="Next step navigation"] .setup-label {
+  text-align: center !important;
+  width: 100% !important;
+}

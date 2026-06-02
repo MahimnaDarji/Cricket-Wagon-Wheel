@@ -16,6 +16,7 @@ const runOptionsPanel = document.getElementById("run-options-panel");
 const runChipList = document.getElementById("run-chip-list");
 const nextBallButton = document.getElementById("next-ball-btn");
 const undoShotButton = document.getElementById("undo-shot-btn");
+const undoShotMainButton = document.getElementById("undo-shot-main-btn");
 const clearShotsButton = document.getElementById("clear-shots-btn");
 const completeInningsButton = document.getElementById("complete-innings-btn");
 const downloadExportBlock = document.getElementById("download-export-block");
@@ -194,6 +195,8 @@ function applyHistoryRecordToState(record) {
   const selectedHistoryName = String(
     rosterById[selectedHistoryPlayerId] || record?.playerName || "Player"
   ).trim() || "Player";
+  const selectedHistoryAvatar = String(record?.playerAvatar || "").trim() ||
+    getFallbackAvatarForHistory(selectedHistoryPlayerId);
 
   state.mode = "individual";
   state.isHistoryDetailView = true;
@@ -202,7 +205,7 @@ function applyHistoryRecordToState(record) {
     id: selectedHistoryPlayerId,
     name: selectedHistoryName,
     battingStyle: record?.playerBattingStyle || "right",
-    avatar: record?.playerAvatar || "",
+    avatar: selectedHistoryAvatar,
   }, 0)];
   state.selectedPlayerId = state.players[0].id;
 
@@ -291,6 +294,29 @@ function normalizePlayer(player, index) {
     battingStyle: style,
     avatar: String(player?.avatar || ""),
   };
+}
+
+function getFallbackAvatarForHistory(playerId) {
+  const normalizedPlayerId = String(playerId || "").trim();
+
+  const playerSetup = safeParse(localStorage.getItem("playerSetup") || "");
+  if (playerSetup && Array.isArray(playerSetup.players)) {
+    const matchingPlayer = playerSetup.players.find(
+      (entry) => String(entry?.id || "").trim() === normalizedPlayerId
+    );
+    const setupAvatar = String(matchingPlayer?.avatar || "").trim();
+    if (setupAvatar) {
+      return setupAvatar;
+    }
+  }
+
+  const sessionUser = safeParse(localStorage.getItem("cww_session_user") || "");
+  const sessionAvatar = String(sessionUser?.profileImageUrl || "").trim();
+  if (sessionAvatar) {
+    return sessionAvatar;
+  }
+
+  return "";
 }
 
 function loadState() {
@@ -767,6 +793,8 @@ function buildCompletedInningsRecord() {
     id: `${selectedPlayer?.id || "player"}-${savedAt}-${Math.random().toString(36).slice(2, 7)}`,
     playerId: selectedPlayer?.id || null,
     playerName: selectedPlayer?.name || "Player",
+    playerAvatar: String(selectedPlayer?.avatar || ""),
+    playerBattingStyle: String(selectedPlayer?.battingStyle || "right"),
     playerRosterNameById: {
       [selectedPlayer?.id || "player"]: selectedPlayer?.name || "Player",
     },
@@ -817,6 +845,8 @@ function appendInningsToHistory(record) {
   const normalized = {
     ...record,
     id: String(record.id || `${record.playerId || "player"}-${record.savedAt || Date.now()}`),
+    playerAvatar: String(record?.playerAvatar || ""),
+    playerBattingStyle: String(record?.playerBattingStyle || "right"),
     savedAt: record.savedAt || new Date().toISOString(),
     runsSequence: Array.isArray(record.runsSequence) ? record.runsSequence.map((run) => Number(run) || 0) : [],
     totalRuns: Number(record.totalRuns) || 0,
@@ -1073,6 +1103,12 @@ function setupRunSelection() {
 
   if (undoShotButton) {
     undoShotButton.addEventListener("click", () => {
+      undoLastShot();
+    });
+  }
+
+  if (undoShotMainButton) {
+    undoShotMainButton.addEventListener("click", () => {
       undoLastShot();
     });
   }
@@ -1664,3 +1700,140 @@ if (shouldAutoDownloadHistoryExport()) {
 if (REVIEW_GROUND_OVERLAY_ENABLED) {
   window.addEventListener("resize", rerenderGroundOverlay);
 }
+
+
+function hasWagonWheelUnsavedChanges() {
+  const hasSelectedRun = Number.isInteger(state.wagonWheel.selectedRun);
+
+  const hasBalls = Object.values(state.wagonWheel.inningsBallsByPlayer || {}).some((balls) => {
+    return Array.isArray(balls) && balls.length > 0;
+  });
+
+  const hasShots = Object.values(state.wagonWheel.shotsByPlayer || {}).some((shots) => {
+    return Array.isArray(shots) && shots.length > 0;
+  });
+
+  return hasSelectedRun || hasBalls || hasShots;
+}
+
+function clearCurrentWagonWheelSession() {
+  state.wagonWheel.enabled = false;
+  state.wagonWheel.selectedRun = null;
+  state.wagonWheel.inningsBallsByPlayer = {};
+  state.wagonWheel.shotsByPlayer = {};
+
+  localStorage.removeItem("wagonWheelInnings");
+
+  renderRunSelection();
+  renderTopRightSummaryCard();
+  renderShotArrows();
+
+  if (downloadExportBlock) {
+    downloadExportBlock.classList.add("is-hidden");
+  }
+}
+
+function saveCurrentWagonWheelToHistoryBeforeBack() {
+  if (!hasWagonWheelUnsavedChanges()) {
+    return;
+  }
+
+  if (Number.isInteger(state.wagonWheel.selectedRun)) {
+    saveCurrentBallAndResetSelection();
+  }
+
+  const completedRecord = saveInningsState();
+  appendInningsToHistory(completedRecord);
+  clearCurrentWagonWheelSession();
+}
+
+function goBackFromWagonWheel() {
+  if (window.history.length > 1) {
+    window.history.back();
+    return;
+  }
+
+  window.location.href = "player-setup.html";
+}
+
+function showWagonWheelBackConfirm() {
+  const existing = document.getElementById("wagon-wheel-back-confirm-modal");
+  if (existing) {
+    existing.remove();
+  }
+
+  const backdrop = document.createElement("div");
+  backdrop.id = "wagon-wheel-back-confirm-modal";
+  backdrop.className = "modal-backdrop";
+
+  const modal = document.createElement("div");
+  modal.className = "confirm-modal";
+
+  const title = document.createElement("h3");
+  title.textContent = "Save Changes";
+
+  const message = document.createElement("p");
+  message.className = "confirm-message";
+  message.textContent = "Do you want to save your changes?";
+
+  const actions = document.createElement("div");
+  actions.className = "confirm-actions";
+
+  const noButton = document.createElement("button");
+  noButton.type = "button";
+  noButton.className = "wagon-wheel-action-btn";
+  noButton.textContent = "No";
+
+  const yesButton = document.createElement("button");
+  yesButton.type = "button";
+  yesButton.className = "wagon-wheel-action-btn complete";
+  yesButton.textContent = "Yes";
+
+  noButton.addEventListener("click", () => {
+    backdrop.remove();
+    clearCurrentWagonWheelSession();
+    goBackFromWagonWheel();
+  });
+
+  yesButton.addEventListener("click", () => {
+    backdrop.remove();
+    saveCurrentWagonWheelToHistoryBeforeBack();
+    goBackFromWagonWheel();
+  });
+
+  backdrop.addEventListener("click", (event) => {
+    if (event.target === backdrop) {
+      backdrop.remove();
+    }
+  });
+
+  actions.appendChild(noButton);
+  actions.appendChild(yesButton);
+  modal.appendChild(title);
+  modal.appendChild(message);
+  modal.appendChild(actions);
+  backdrop.appendChild(modal);
+  document.body.appendChild(backdrop);
+}
+
+function setupWagonWheelBackBehavior() {
+  const backButton = document.getElementById("wagon-wheel-back-btn");
+
+  if (!backButton) {
+    return;
+  }
+
+  backButton.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    if (!hasWagonWheelUnsavedChanges()) {
+      goBackFromWagonWheel();
+      return;
+    }
+
+    showWagonWheelBackConfirm();
+  }, true);
+}
+
+document.addEventListener("DOMContentLoaded", setupWagonWheelBackBehavior);

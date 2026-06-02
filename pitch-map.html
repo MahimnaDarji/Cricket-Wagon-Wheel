@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CreaseVision | Pitch Map</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="dashboard.css" />
+  <link rel="stylesheet" href="pitch-map.css?v=1780286735273" />
+</head>
+<body>
+  <div class="dashboard-shell">
+    <header class="dash-header">
+      <div class="brand-wrap">
+        <h1>CreaseVision Control Desk</h1>
+      </div>
+      <div class="profile-wrap">
+        <a class="profile-btn" href="profile.html">Profile Settings</a>
+        <a class="logout-btn" href="index.html" data-logout="true">Logout</a>
+      </div>
+    </header>
+
+    <main class="pitch-map-layout">
+      <!-- LEFT: Review Setup panel -->
+      <aside class="pitch-panel">
+        <section class="setup-block selected-bowler-card">
+          <p class="setup-label">Selected Bowler</p>
+          <div class="selected-bowler-row">
+            <div id="bowler-avatar" class="pitch-avatar"></div>
+            <div>
+              <p id="bowler-name-display" class="selected-name">Pat Cummins</p>
+              <p id="bowler-style-display" class="selected-style">Right Arm Fast</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="setup-block">
+          <p class="setup-label">Selected Match / Session</p>
+          <p class="panel-strong">Practice Session</p>
+          <p class="live-line">vs All Batters</p>
+        </section>
+
+        <section class="setup-block">
+          <p class="setup-label">Selected Ground</p>
+          <p id="pitch-ground-name" class="panel-strong">Custom Ground</p>
+          <p id="pitch-ground-mode" class="live-line">Ground Mode: Custom</p>
+        </section>
+
+        <section class="setup-block create-block">
+          <h2>Create Pitch Map</h2>
+          <p class="live-line">Mark each delivery on the pitch.</p>
+
+          <p class="setup-label step-label">1. Select Outcome</p>
+          <div class="option-grid outcome-grid">
+            <button class="pitch-option active" data-outcome="Dot" type="button"><span class="dot-ball dot"></span>Dot</button>
+            <button class="pitch-option" data-outcome="Run" type="button"><span class="dot-ball run"></span>Run</button>
+            <button class="pitch-option" data-outcome="Boundary" type="button"><span class="dot-ball boundary"></span>Boundary</button>
+            <button class="pitch-option" data-outcome="Wicket" type="button"><span class="dot-ball wicket"></span>Wicket</button>
+          </div>
+
+          <p class="setup-label step-label">2. Click on Pitch</p>
+          <p class="live-line">Click anywhere inside the selected length area to mark the delivery.</p>
+
+          <button id="next-delivery-btn" class="wagon-wheel-action-btn complete" type="button">Next Delivery</button>
+          <button id="undo-delivery-btn" class="wagon-wheel-action-btn" type="button">Undo</button>
+          <button id="complete-bowling-btn" class="panel-back-btn" type="button">Complete Bowling</button>
+          <section id="download-export-block" class="setup-block is-hidden" aria-label="Download pitch map image">
+            <p class="setup-label">Export Pitch Map</p>
+            <p class="live-line">Bowling completed. Download a clean pitch map image.</p>
+            <button id="download-image-btn" type="button" class="wagon-wheel-action-btn">Download Image</button>
+            <button id="return-dashboard-btn" type="button" class="wagon-wheel-action-btn complete">Save Pitch Map</button>
+          </section>
+
+          <button id="pitch-map-back-btn" type="button" class="panel-back-btn">Back</button>
+        </section>
+      </aside>
+
+      <!-- MIDDLE: Pitch workspace -->
+      <section class="pitch-workspace">
+        <div class="pitch-topbar">
+          <div>
+            <h2>Pitch Map</h2>
+            <p>Visualize your deliveries and analyze your performance.</p>
+          </div>
+          <div class="pitch-legend">
+            <span><i class="dot-ball dot"></i>Dot</span>
+            <span><i class="dot-ball run"></i>Run</span>
+            <span><i class="dot-ball boundary"></i>Boundary</span>
+            <span><i class="dot-ball wicket"></i>Wicket</span>
+          </div>
+          <button class="history-btn" type="button">View History</button>
+        </div>
+
+        <div id="pitch-area" class="pitch-area">
+  <div class="pitch-image-wrap">
+    <img src="assets/pitch-map-base.png?v=final" class="pitch-base-image" alt="Pitch map length zones" />
+    <div id="delivery-layer" class="delivery-layer"></div>
+  </div>
+</div>
+</section>
+
+<!-- RIGHT: Stats panel -->
+      <section class="summary-grid">
+
+        <article class="summary-card">
+          <h3>Length Wise Breakdown</h3>
+          <div class="summary-items four">
+            <div id="full-toss-row"><span>Full Toss</span><strong id="full-toss-count">0</strong></div>
+            <div id="yorker-row"><span>Yorker</span><strong id="yorker-count">0</strong></div>
+            <div id="half-volley-row"><span>Half Volley</span><strong id="half-volley-count">0</strong></div>
+            <div id="full-row"><span>Full</span><strong id="full-count">0</strong></div>
+            <div id="good-row"><span>Good</span><strong id="good-count">0</strong></div>
+            <div id="short-row"><span>Short</span><strong id="short-count">0</strong></div>
+          </div>
+        </article>
+
+        <article class="summary-card">
+          <h3>Area Wise Breakdown</h3>
+          <div class="summary-items three">
+            <div id="off-row"><span>Off Side</span><strong id="off-count">0</strong></div>
+            <div id="middle-row"><span>Middle</span><strong id="middle-count">0</strong></div>
+            <div id="leg-row"><span>Leg Side</span><strong id="leg-count">0</strong></div>
+          </div>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <div id="innings-confirm-modal" class="modal-backdrop is-hidden" role="dialog" aria-modal="true" aria-labelledby="innings-confirm-title">
+    <div class="confirm-modal">
+      <h3 id="innings-confirm-title">Complete Bowling</h3>
+      <p id="innings-confirm-message" class="confirm-message">Are you sure you want to complete the bowling?</p>
+      <div class="confirm-actions">
+        <button id="confirm-innings-no" type="button" class="wagon-wheel-action-btn">No</button>
+        <button id="confirm-innings-yes" type="button" class="wagon-wheel-action-btn complete">Yes</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
+  <script src="auth-header.js" defer></script>
+  <script src="pitch-map.js?v=1780376525005" defer></script>
+  <script src="pitch-map-export.js" defer></script>
+
+<script id="cv-pitch-profile-sync">
+(function () {
+  function parseJson(value, fallback) {
+    try {
+      const parsed = JSON.parse(value || "");
+      return parsed || fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  function getIdentity() {
+    const playerSetup = parseJson(localStorage.getItem("playerSetup"), null);
+
+    if (playerSetup && Array.isArray(playerSetup.players) && playerSetup.players.length > 0) {
+      const player = playerSetup.players[0] || {};
+      const name = String(player.name || "").trim();
+      const avatar = String(player.avatar || "").trim();
+
+      if (name || avatar) {
+        return { name: name, avatar: avatar };
+      }
+    }
+
+    const keys = ["cww_session_user", "creasevisionUserProfile", "currentUser"];
+
+    for (const key of keys) {
+      const value = parseJson(localStorage.getItem(key), null);
+
+      if (value && typeof value === "object") {
+        const name = String(value.name || "").trim();
+        const avatar = String(value.profileImageUrl || value.avatar || "").trim();
+
+        if (name || avatar) {
+          return { name: name, avatar: avatar };
+        }
+      }
+    }
+
+    return {
+      name: String(localStorage.getItem("profileName") || "").trim(),
+      avatar: String(localStorage.getItem("profileImageUrl") || "").trim()
+    };
+  }
+
+  function applyPitchIdentity() {
+    const identity = getIdentity();
+    const bowlers = parseJson(localStorage.getItem("creasevisionBowlers"), []);
+    const safeBowlers = Array.isArray(bowlers) ? bowlers : [];
+    const existing = safeBowlers[0] || {};
+
+    const bowler = {
+      id: String(existing.id || "bowler-1"),
+      name: identity.name || String(existing.name || "Bowler"),
+      style: String(existing.style || "Right Arm Bowler"),
+      avatar: identity.avatar || String(existing.avatar || "")
+    };
+
+    safeBowlers[0] = bowler;
+    localStorage.setItem("creasevisionBowlerMode", "individual");
+    localStorage.setItem("creasevisionSelectedBowlerIndex", "0");
+    localStorage.setItem("creasevisionBowlers", JSON.stringify([bowler]));
+
+    const nameElement = document.getElementById("bowler-name-display");
+    const styleElement = document.getElementById("bowler-style-display");
+    const avatarElement = document.getElementById("bowler-avatar");
+
+    if (nameElement) {
+      nameElement.textContent = bowler.name;
+    }
+
+    if (styleElement) {
+      styleElement.textContent = bowler.style;
+    }
+
+    if (avatarElement) {
+      avatarElement.innerHTML = "";
+      avatarElement.classList.toggle("has-image", Boolean(bowler.avatar));
+
+      if (bowler.avatar) {
+        const img = document.createElement("img");
+        img.src = bowler.avatar;
+        img.alt = bowler.name + " profile";
+        avatarElement.appendChild(img);
+      }
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    applyPitchIdentity();
+    window.setTimeout(applyPitchIdentity, 0);
+    window.setTimeout(applyPitchIdentity, 150);
+  });
+
+  window.addEventListener("pageshow", applyPitchIdentity);
+})();
+</script>
+</body>
+</html>
+
+
+
+
+
+

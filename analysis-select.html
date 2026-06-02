@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CreaseVision | Select Analysis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="dashboard.css" />
+  <link rel="stylesheet" href="analysis-select.css" />
+</head>
+<body>
+  <div class="dashboard-shell">
+    <header class="dash-header">
+      <div class="brand-wrap">
+        <h1>CreaseVision Control Desk</h1>
+      </div>
+      <div class="profile-wrap" aria-label="Account actions">
+        <a class="profile-btn" href="profile.html">Profile Settings</a>
+        <a class="logout-btn" href="index.html" data-logout="true">Logout</a>
+      </div>
+    </header>
+
+    <main class="analysis-select-page">
+      <section class="analysis-panel">
+        <p class="setup-label">Analysis Type</p>
+        <h2>Choose what you want to create</h2>
+        <p class="analysis-copy">Your ground setup is saved. Select batting wagon wheel or bowling pitch map.</p>
+
+        <div class="analysis-choice-grid">
+          <a class="analysis-card" href="player-setup.html?next=review.html">
+            <div class="analysis-card-text">
+              <span class="choice-tag">Batting</span>
+              <h3>Wagon Wheel</h3>
+              <p>Create batter shot maps with runs, innings summary, export, and history.</p>
+            </div>
+            <img class="analysis-preview-image wagon-preview-image" src="assets/analysis-wagon-wheel.png" alt="Wagon wheel preview" />
+          </a>
+
+          <a class="analysis-card" href="bowler-setup.html">
+            <div class="analysis-card-text">
+              <span class="choice-tag">Bowling</span>
+              <h3>Pitch Map</h3>
+              <p>Create bowling length maps with delivery zones, outcomes, and bowler analysis.</p>
+            </div>
+            <img class="analysis-preview-image pitch-preview-image" src="assets/analysis-pitch-map.png" alt="Pitch map preview" />
+          </a>
+        </div>
+
+        <button type="button" class="mode-btn active analysis-back-btn" onclick="window.location.href='dashboard.html'">Back</button>
+      </section>
+    </main>
+  </div>
+
+  <script src="auth-header.js" defer></script>
+</body>
+</html>

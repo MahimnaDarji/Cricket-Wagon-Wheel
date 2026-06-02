@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CreaseVision | Bowler Setup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="dashboard.css" />
+  <link rel="stylesheet" href="bowler-setup.css" />
+</head>
+<body>
+  <div class="dashboard-shell">
+    <header class="dash-header">
+      <div class="brand-wrap">
+        <h1>CreaseVision Control Desk</h1>
+      </div>
+      <div class="profile-wrap" aria-label="Account actions">
+        <a class="profile-btn" href="profile.html">Profile Settings</a>
+        <a class="logout-btn" href="index.html" data-logout="true">Logout</a>
+      </div>
+    </header>
+
+    <main class="bowler-layout">
+      <section class="bowler-panel" aria-label="Bowler setup">
+        <h2>Bowler Setup</h2>
+
+        <section class="setup-block">
+          <p class="setup-label">Setup Mode</p>
+          <div class="mode-toggle">
+            <button id="individual-mode" class="mode-btn active" type="button">Individual Mode</button>
+            <button id="team-mode" class="mode-btn" type="button">Team Mode</button>
+          </div>
+        </section>
+
+        <section class="setup-block">
+          <p id="bowler-details-title" class="setup-label">Bowler 1 Details</p>
+
+          <div class="avatar-row">
+            <div class="bowler-avatar" aria-hidden="true">
+              <span></span>
+            </div>
+
+            <div class="avatar-actions">
+              <button id="upload-avatar-btn" class="mode-btn active" type="button">Upload Profile Image</button>
+              <button id="reset-avatar-btn" class="mode-btn" type="button">Reset Avatar</button>
+              <input id="avatar-input" type="file" accept="image/*" hidden />
+            </div>
+          </div>
+
+          <label class="setup-field-label" for="bowler-name">Bowler Name</label>
+          <input id="bowler-name" class="setup-input" type="text" />
+
+          <p class="setup-field-label">Bowling Style</p>
+          <div class="mode-toggle">
+            <button id="right-arm-btn" class="mode-btn active" type="button">Right Arm Bowler</button>
+            <button id="left-arm-btn" class="mode-btn" type="button">Left Arm Bowler</button>
+          </div>
+
+          <button id="remove-bowler-btn" class="mode-btn disabled-btn" type="button" disabled>Remove Selected Bowler</button>
+          <p id="mode-status" class="live-line">Individual mode is active.</p>
+        </section>
+
+        <section class="setup-block">
+          <button id="confirm-btn" class="mode-btn active full-btn" type="button">Confirm & Continue</button>
+        </section>
+
+        <button type="button" class="panel-back-btn" onclick="window.location.href='analysis-select.html'">Back</button>
+      </section>
+
+      <section class="bowler-panel selector-panel" aria-label="Bowler selector">
+        <h2>Bowler Selector</h2>
+
+        <section class="setup-block selector-top">
+          <div>
+            <p id="bowler-count" class="setup-label">Bowlers: 1 / 1</p>
+            <p id="selector-help" class="live-line">Switch to Team Mode to manage up to 11 bowlers.</p>
+          </div>
+          <button id="add-bowler-btn" class="mode-btn add-btn" type="button" disabled>Add Bowler</button>
+        </section>
+
+        <section class="setup-block bowler-list-wrap">
+          <div id="bowler-list" class="bowler-list"></div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script src="auth-header.js" defer></script>
+  <script src="bowler-setup.js?v=1780376392599" defer></script>
+
+<script id="cv-bowler-profile-sync">
+(function () {
+  function parseJson(value, fallback) {
+    try {
+      const parsed = JSON.parse(value || "");
+      return parsed || fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  function getIdentity() {
+    const playerSetup = parseJson(localStorage.getItem("playerSetup"), null);
+
+    if (playerSetup && Array.isArray(playerSetup.players) && playerSetup.players.length > 0) {
+      const player = playerSetup.players[0] || {};
+      const name = String(player.name || "").trim();
+      const avatar = String(player.avatar || "").trim();
+
+      if (name || avatar) {
+        return { name: name, avatar: avatar };
+      }
+    }
+
+    const keys = ["cww_session_user", "creasevisionUserProfile", "currentUser"];
+
+    for (const key of keys) {
+      const value = parseJson(localStorage.getItem(key), null);
+
+      if (value && typeof value === "object") {
+        const name = String(value.name || "").trim();
+        const avatar = String(value.profileImageUrl || value.avatar || "").trim();
+
+        if (name || avatar) {
+          return { name: name, avatar: avatar };
+        }
+      }
+    }
+
+    return {
+      name: String(localStorage.getItem("profileName") || "").trim(),
+      avatar: String(localStorage.getItem("profileImageUrl") || "").trim()
+    };
+  }
+
+  function getBowlers() {
+    const parsed = parseJson(localStorage.getItem("creasevisionBowlers"), []);
+    return Array.isArray(parsed) ? parsed : [];
+  }
+
+  function saveSyncedBowler() {
+    const identity = getIdentity();
+    const bowlers = getBowlers();
+    const selectedIndexRaw = Number(localStorage.getItem("creasevisionSelectedBowlerIndex") || "0");
+    const selectedIndex = Number.isInteger(selectedIndexRaw) && selectedIndexRaw >= 0 ? selectedIndexRaw : 0;
+    const existing = bowlers[selectedIndex] || {};
+
+    const syncedBowler = {
+      id: String(existing.id || "bowler-1"),
+      name: identity.name || String(existing.name || "Bowler"),
+      style: String(existing.style || "Right Arm Bowler"),
+      avatar: identity.avatar || String(existing.avatar || "")
+    };
+
+    const mode = localStorage.getItem("creasevisionBowlerMode") === "team" ? "team" : "individual";
+
+    if (mode === "individual") {
+      localStorage.setItem("creasevisionBowlerMode", "individual");
+      localStorage.setItem("creasevisionSelectedBowlerIndex", "0");
+      localStorage.setItem("creasevisionBowlers", JSON.stringify([syncedBowler]));
+      return { bowler: syncedBowler, bowlers: [syncedBowler], selectedIndex: 0, mode: "individual" };
+    }
+
+    bowlers[selectedIndex] = syncedBowler;
+    localStorage.setItem("creasevisionBowlerMode", "team");
+    localStorage.setItem("creasevisionSelectedBowlerIndex", String(selectedIndex));
+    localStorage.setItem("creasevisionBowlers", JSON.stringify(bowlers));
+
+    return { bowler: syncedBowler, bowlers: bowlers, selectedIndex: selectedIndex, mode: "team" };
+  }
+
+  function paintAvatar(container, name, avatar) {
+    if (!container) {
+      return;
+    }
+
+    container.innerHTML = "";
+    container.classList.toggle("has-image", Boolean(avatar));
+
+    if (avatar) {
+      const img = document.createElement("img");
+      img.src = avatar;
+      img.alt = name + " profile";
+      container.appendChild(img);
+      return;
+    }
+
+    container.appendChild(document.createElement("span"));
+  }
+
+  function paintList(result) {
+    const list = document.getElementById("bowler-list");
+
+    if (!list) {
+      return;
+    }
+
+    list.innerHTML = "";
+
+    result.bowlers.forEach(function (bowler, index) {
+      const card = document.createElement("button");
+      card.type = "button";
+      card.className = "bowler-card" + (index === result.selectedIndex ? " active" : "");
+
+      const avatar = document.createElement("div");
+      avatar.className = "bowler-card-avatar" + (bowler.avatar ? " has-image" : "");
+      paintAvatar(avatar, bowler.name, bowler.avatar);
+
+      const meta = document.createElement("div");
+
+      const name = document.createElement("p");
+      name.className = "bowler-card-name";
+      name.textContent = bowler.name;
+
+      const style = document.createElement("p");
+      style.className = "bowler-card-style";
+      style.textContent = bowler.style;
+
+      meta.appendChild(name);
+      meta.appendChild(style);
+      card.appendChild(avatar);
+      card.appendChild(meta);
+      list.appendChild(card);
+    });
+  }
+
+  function applyBowlerProfile() {
+    const result = saveSyncedBowler();
+    const bowler = result.bowler;
+
+    const nameInput = document.getElementById("bowler-name");
+    const avatarBox = document.querySelector(".bowler-avatar");
+    const count = document.getElementById("bowler-count");
+    const status = document.getElementById("mode-status");
+    const help = document.getElementById("selector-help");
+
+    if (nameInput) {
+      nameInput.value = bowler.name;
+    }
+
+    paintAvatar(avatarBox, bowler.name, bowler.avatar);
+    paintList(result);
+
+    if (count) {
+      count.textContent = "Bowlers: " + result.bowlers.length + " / " + (result.mode === "team" ? "11" : "1");
+    }
+
+    if (status) {
+      status.textContent = result.mode === "team" ? "Team mode is active." : "Individual mode is active.";
+    }
+
+    if (help) {
+      help.textContent = result.mode === "team" ? "Add and manage up to 11 bowlers." : "Switch to Team Mode to manage up to 11 bowlers.";
+    }
+  }
+
+  function confirmWithSyncedBowler(event) {
+    applyBowlerProfile();
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    window.location.href = "pitch-map.html";
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    applyBowlerProfile();
+
+    const confirmBtn = document.getElementById("confirm-btn");
+    if (confirmBtn) {
+      confirmBtn.addEventListener("click", confirmWithSyncedBowler, true);
+    }
+
+    window.setTimeout(applyBowlerProfile, 0);
+    window.setTimeout(applyBowlerProfile, 150);
+  });
+
+  window.addEventListener("pageshow", applyBowlerProfile);
+})();
+</script>
+</body>
+</html>

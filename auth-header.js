@@ -1,3 +1,67 @@
+
+(function setupFreshAnalysisOnLogin() {
+  const ACTIVE_ANALYSIS_KEYS = [
+    "creasevisionPitchDeliveries",
+    "wagonWheelInnings",
+    "pitch_map_history_view_record_id",
+    "cww_history_view_record_id",
+    "cww_history_auto_export"
+  ];
+
+  function safeParse(value) {
+    try {
+      return value ? JSON.parse(value) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function getCurrentLoggedInUserKey() {
+    const sessionUser = safeParse(localStorage.getItem("cww_session_user"));
+    const currentUser = safeParse(localStorage.getItem("currentUser"));
+    const profileUser = safeParse(localStorage.getItem("creasevisionUserProfile"));
+
+    const user = sessionUser || currentUser || profileUser || {};
+
+    const id = String(user.id || "").trim();
+    const email = String(user.email || "").trim();
+    const name = String(user.name || "").trim();
+
+    return id || email || name || "";
+  }
+
+  function clearActiveAnalysisSessions() {
+    ACTIVE_ANALYSIS_KEYS.forEach((key) => {
+      localStorage.removeItem(key);
+    });
+  }
+
+  function freshStartIfNewLogin() {
+    const currentUserKey = getCurrentLoggedInUserKey();
+
+    if (!currentUserKey) {
+      return;
+    }
+
+    const lastUserKey = localStorage.getItem("creasevisionLastFreshStartUserKey") || "";
+    const loginMarker = sessionStorage.getItem("creasevisionFreshStartDoneForThisTab") || "";
+
+    if (lastUserKey !== currentUserKey || loginMarker !== currentUserKey) {
+      clearActiveAnalysisSessions();
+      localStorage.setItem("creasevisionLastFreshStartUserKey", currentUserKey);
+      sessionStorage.setItem("creasevisionFreshStartDoneForThisTab", currentUserKey);
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", freshStartIfNewLogin);
+  } else {
+    freshStartIfNewLogin();
+  }
+
+  window.addEventListener("pageshow", freshStartIfNewLogin);
+})();
+
 const STATIC_AUTH_MODE =
   window.location.hostname.endsWith("github.io") ||
   window.location.protocol === "file:";
@@ -126,4 +190,105 @@ window.CWWAuth = {
 document.addEventListener("DOMContentLoaded", async () => {
   await guardAuthenticatedPages();
   attachLogoutHandlers();
+});
+
+
+function getLatestCreaseVisionProfile() {
+  const sources = [
+    localStorage.getItem("cww_session_user"),
+    localStorage.getItem("creasevisionUserProfile"),
+    localStorage.getItem("currentUser")
+  ];
+
+  for (const source of sources) {
+    try {
+      const parsed = source ? JSON.parse(source) : null;
+      if (parsed && typeof parsed === "object") {
+        return {
+          name: String(parsed.name || ""),
+          email: String(parsed.email || ""),
+          profileImageUrl: String(parsed.profileImageUrl || "")
+        };
+      }
+    } catch {}
+  }
+
+  return {
+    name: localStorage.getItem("profileName") || "",
+    email: localStorage.getItem("profileEmail") || "",
+    profileImageUrl: localStorage.getItem("profileImageUrl") || ""
+  };
+}
+
+function applyCreaseVisionProfileEverywhere(profile = getLatestCreaseVisionProfile()) {
+  const name = String(profile.name || "").trim();
+  const email = String(profile.email || "").trim();
+  const image = String(profile.profileImageUrl || "").trim();
+
+  const nameSelectors = [
+    "#user-name",
+    "#dashboard-user-name",
+    "#dashboard-name",
+    "#header-user-name",
+    "#profile-summary-name",
+    "[data-user-name]",
+    "[data-profile-name]"
+  ];
+
+  const emailSelectors = [
+    "#user-email",
+    "#dashboard-user-email",
+    "#header-user-email",
+    "[data-user-email]",
+    "[data-profile-email]"
+  ];
+
+  const imageSelectors = [
+    "#user-avatar",
+    "#dashboard-user-avatar",
+    "#header-user-avatar",
+    "#profile-avatar",
+    "[data-user-avatar]",
+    "[data-profile-avatar]"
+  ];
+
+  if (name) {
+    nameSelectors.forEach((selector) => {
+      document.querySelectorAll(selector).forEach((element) => {
+        element.textContent = name;
+      });
+    });
+  }
+
+  if (email) {
+    emailSelectors.forEach((selector) => {
+      document.querySelectorAll(selector).forEach((element) => {
+        element.textContent = email;
+      });
+    });
+  }
+
+  if (image) {
+    imageSelectors.forEach((selector) => {
+      document.querySelectorAll(selector).forEach((element) => {
+        if (element.tagName === "IMG") {
+          element.src = image;
+        } else {
+          element.style.backgroundImage = "url(" + image + ")";
+        }
+      });
+    });
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  applyCreaseVisionProfileEverywhere();
+});
+
+window.addEventListener("storage", () => {
+  applyCreaseVisionProfileEverywhere();
+});
+
+window.addEventListener("creasevision-profile-updated", (event) => {
+  applyCreaseVisionProfileEverywhere(event.detail);
 });

@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="review.css" />
+  <link rel="stylesheet" href="review.css?v=1780286856417" />
 </head>
 <body>
   <div class="dashboard-shell">
@@ -23,7 +23,7 @@
 
     <main class="dash-layout" aria-label="Player and ground review workspace">
       <aside class="panel panel-left" aria-label="Review details panel">
-        <h2>Review Setup</h2>
+        <h2>Batter Setup</h2>
 
         <section class="setup-block player-summary" aria-label="Selected player details">
           <p class="setup-label">Selected Player</p>
@@ -75,7 +75,7 @@
           <button id="return-dashboard-btn" type="button" class="wagon-wheel-action-btn complete">Return to Dashboard</button>
         </section>
 
-        <button type="button" class="panel-back-btn" onclick="window.history.back()">Back</button>
+        <button id="wagon-wheel-back-btn" type="button" class="panel-back-btn">Back</button>
       </aside>
 
       <section class="ground-stage" aria-label="Ground visualization with dimensions">
@@ -125,6 +125,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
   <script src="auth-header.js" defer></script>
-  <script src="review.js" defer></script>
+  <script src="review.js?v=1780287586390" defer></script>
 </body>
 </html>

@@ -596,3 +596,37 @@ updateBoundaryStateFromMode();
 updateLiveArea();
 setupBoundaryReplay();
 window.addEventListener("resize", scheduleResponsiveBoundaryReflow);
+
+function saveGroundSelectionForPitchMap() {
+  const presetSelect = document.getElementById("stadium-preset");
+  const presetModeBtn = document.getElementById("mode-preset");
+  const customModeBtn = document.getElementById("mode-custom");
+
+  const stadiumLabels = {
+    mcg: "Melbourne Cricket Ground",
+    lords: "Lord's Cricket Ground",
+    wankhede: "Wankhede Stadium",
+    eden: "Eden Gardens"
+  };
+
+  const isCustom = customModeBtn && customModeBtn.classList.contains("active");
+  const selectedValue = presetSelect ? presetSelect.value : "mcg";
+  const selectedName = isCustom ? "Custom Ground" : (stadiumLabels[selectedValue] || "Melbourne Cricket Ground");
+  const selectedMode = isCustom ? "Custom" : "Preset";
+
+  localStorage.setItem("creasevisionGroundName", selectedName);
+  localStorage.setItem("creasevisionGroundModeLabel", selectedMode);
+  localStorage.setItem("creasevisionGroundPresetValue", selectedValue);
+}
+
+document.addEventListener("click", function(event) {
+  const target = event.target.closest("a, button");
+  if (!target) return;
+
+  const href = target.getAttribute("href") || "";
+  const text = target.textContent.trim().toLowerCase();
+
+  if (href.includes("analysis-select.html") || text.includes("continue to analysis")) {
+    saveGroundSelectionForPitchMap();
+  }
+});

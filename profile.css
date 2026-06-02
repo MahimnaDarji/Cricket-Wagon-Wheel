@@ -569,3 +569,70 @@ button {
     padding: var(--space-2);
   }
 }
+
+.cv-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(18, 23, 28, 0.62);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.cv-confirm-modal {
+  width: min(430px, 100%);
+  border: 1px solid #8d8372;
+  background: linear-gradient(180deg, var(--panel-offwhite), var(--panel-warm));
+  color: var(--ink);
+  border-radius: 12px;
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.32);
+}
+
+.cv-confirm-modal h3 {
+  margin: 0;
+  font-family: "Oswald", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 1.35rem;
+}
+
+.cv-confirm-modal p {
+  margin: 0;
+  font-size: 1.05rem;
+  color: #2c3531;
+}
+
+.cv-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.cv-confirm-actions .action-btn {
+  min-width: 96px;
+}
+
+
+.pitch-history-preview {
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+.profile-pitch-delivery-dot {
+  position: absolute !important;
+  width: 2px !important;
+  height: 2px !important;
+  border-radius: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  border: 0.45px solid #24115f !important;
+  box-shadow:
+    0 0 0 0.45px rgba(255, 212, 0, 0.9),
+    0 0.5px 1px rgba(0, 0, 0, 0.55) !important;
+  z-index: 3 !important;
+  pointer-events: none !important;
+}

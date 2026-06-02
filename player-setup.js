@@ -1,3 +1,91 @@
+function safeParseJson(value, fallback) {
+  try {
+    const parsed = value ? JSON.parse(value) : fallback;
+    return parsed || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function cleanIdentityName(value) {
+  const name = String(value || "").trim();
+  const blocked = [
+    "abc",
+    "bowler",
+    "bowler 1",
+    "player",
+    "player 1",
+    "melbourne cricket ground",
+    "custom ground",
+    "practice session"
+  ];
+
+  if (!name || blocked.includes(name.toLowerCase())) {
+    return "";
+  }
+
+  return name;
+}
+
+function getProfileIdentityOnly() {
+  const keys = [
+    "cww_session_user",
+    "creasevisionUserProfile",
+    "currentUser"
+  ];
+
+  for (const key of keys) {
+    const value = safeParseJson(localStorage.getItem(key), null);
+
+    if (value && typeof value === "object") {
+      const name = cleanIdentityName(value.name);
+      const avatar = String(value.profileImageUrl || value.avatar || "").trim();
+
+      if (name || avatar) {
+        return { name, avatar };
+      }
+    }
+  }
+
+  return {
+    name: cleanIdentityName(localStorage.getItem("profileName")),
+    avatar: String(localStorage.getItem("profileImageUrl") || "").trim()
+  };
+}
+
+function saveIdentityToPlayerAndBowlerSetup(identity, battingStyle, bowlingStyle) {
+  const finalName = cleanIdentityName(identity && identity.name) || "Player";
+  const finalAvatar = String(identity && identity.avatar || "").trim();
+
+  const playerSetup = {
+    mode: "individual",
+    players: [
+      {
+        id: "player-1",
+        name: finalName,
+        battingStyle: battingStyle || "right",
+        avatar: finalAvatar
+      }
+    ],
+    confirmedAt: new Date().toISOString()
+  };
+
+  const bowlerSetup = [
+    {
+      id: "bowler-1",
+      name: finalName,
+      style: bowlingStyle || "Right Arm Bowler",
+      avatar: finalAvatar
+    }
+  ];
+
+  localStorage.setItem("playerSetup", JSON.stringify(playerSetup));
+  localStorage.setItem("creasevisionBowlerMode", "individual");
+  localStorage.setItem("creasevisionSelectedBowlerIndex", "0");
+  localStorage.setItem("creasevisionBowlers", JSON.stringify(bowlerSetup));
+}
+
+
 const modeIndividualButton = document.getElementById("mode-individual");
 const modeTeamButton = document.getElementById("mode-team");
 const addPlayerButton = document.getElementById("add-player");
@@ -20,21 +108,18 @@ const confirmContinueButton = document.getElementById("confirm-continue");
 
 const MODES = {
   INDIVIDUAL: "individual",
-  TEAM: "team",
+  TEAM: "team"
 };
 
 const STYLE = {
   RIGHT: "right",
-  LEFT: "left",
+  LEFT: "left"
 };
 
 const TEAM_MIN_PLAYERS = 3;
 const TEAM_MAX_PLAYERS = 11;
+
 let nextPlayerId = 1;
-let profileDefaultName = "";
-let profileDefaultImageUrl = "";
-let hasManualIndividualNameEdit = false;
-let hasManualIndividualAvatarEdit = false;
 
 const DEFAULT_AVATAR = `data:image/svg+xml;utf8,${encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" fill="none">
@@ -50,33 +135,29 @@ const DEFAULT_AVATAR = `data:image/svg+xml;utf8,${encodeURIComponent(
   </svg>`
 )}`;
 
-const state = {
-  mode: MODES.INDIVIDUAL,
-  individualPlayer: createPlayer("Player 1"),
-  teamPlayers: [createPlayer("Player 1"), createPlayer("Player 2"), createPlayer("Player 3")],
-  selectedTeamPlayerId: null,
-};
-
-state.selectedTeamPlayerId = state.teamPlayers[0].id;
-
 function createPlayer(defaultName) {
   const player = {
-    id: `player-${nextPlayerId}`,
+    id: "player-" + nextPlayerId,
     name: defaultName,
     battingStyle: STYLE.RIGHT,
-    avatar: "",
+    avatar: ""
   };
 
   nextPlayerId += 1;
   return player;
 }
 
-function getActivePlayers() {
-  if (state.mode === MODES.INDIVIDUAL) {
-    return [state.individualPlayer];
-  }
+const state = {
+  mode: MODES.INDIVIDUAL,
+  individualPlayer: createPlayer("Player"),
+  teamPlayers: [createPlayer("Player 1"), createPlayer("Player 2"), createPlayer("Player 3")],
+  selectedTeamPlayerId: null
+};
 
-  return state.teamPlayers;
+state.selectedTeamPlayerId = state.teamPlayers[0].id;
+
+function getActivePlayers() {
+  return state.mode === MODES.INDIVIDUAL ? [state.individualPlayer] : state.teamPlayers;
 }
 
 function getSelectedPlayer() {
@@ -84,60 +165,11 @@ function getSelectedPlayer() {
     return state.individualPlayer;
   }
 
-  const selected = state.teamPlayers.find((player) => player.id === state.selectedTeamPlayerId);
-  return selected || state.teamPlayers[0];
+  return state.teamPlayers.find((player) => player.id === state.selectedTeamPlayerId) || state.teamPlayers[0];
 }
 
 function getAvatarSource(player) {
-  return player.avatar || DEFAULT_AVATAR;
-}
-
-function sanitizeProfileName(value) {
-  return String(value || "").trim();
-}
-
-function sanitizeProfileImage(value) {
-  return String(value || "").trim();
-}
-
-function isInitialIndividualName(value) {
-  const name = String(value || "").trim();
-  return name === "" || /^player\s*1$/i.test(name);
-}
-
-function applyProfileNameToIndividualIfEligible() {
-  if (!profileDefaultName || hasManualIndividualNameEdit) {
-    return;
-  }
-
-  const currentName = String(state.individualPlayer?.name || "").trim();
-  if (!isInitialIndividualName(currentName) && currentName !== profileDefaultName) {
-    return;
-  }
-
-  state.individualPlayer.name = profileDefaultName;
-}
-
-function applyProfileAvatarToIndividualIfEligible() {
-  if (!profileDefaultImageUrl || hasManualIndividualAvatarEdit) {
-    return;
-  }
-
-  const currentAvatar = String(state.individualPlayer?.avatar || "").trim();
-  if (currentAvatar && currentAvatar !== profileDefaultImageUrl) {
-    return;
-  }
-
-  state.individualPlayer.avatar = profileDefaultImageUrl;
-}
-
-async function loadProfileDefaults() {
-  const user = await window.CWWAuth?.getSessionUser?.();
-  profileDefaultName = sanitizeProfileName(user?.name);
-  profileDefaultImageUrl = sanitizeProfileImage(user?.profileImageUrl);
-
-  applyProfileNameToIndividualIfEligible();
-  applyProfileAvatarToIndividualIfEligible();
+  return player && player.avatar ? player.avatar : DEFAULT_AVATAR;
 }
 
 function getStyleLabel(style) {
@@ -149,12 +181,7 @@ function isValidBattingStyle(style) {
 }
 
 function isPlayerComplete(player) {
-  if (!player) {
-    return false;
-  }
-
-  const hasName = String(player.name || "").trim().length > 0;
-  return hasName && isValidBattingStyle(player.battingStyle);
+  return Boolean(player && cleanIdentityName(player.name) && isValidBattingStyle(player.battingStyle));
 }
 
 function canConfirmCurrentSetup() {
@@ -162,31 +189,54 @@ function canConfirmCurrentSetup() {
     return isPlayerComplete(state.individualPlayer);
   }
 
-  const hasMinimumPlayers = state.teamPlayers.length >= TEAM_MIN_PLAYERS;
-  if (!hasMinimumPlayers) {
-    return false;
-  }
-
-  return state.teamPlayers.every((player) => isPlayerComplete(player));
+  return state.teamPlayers.length >= TEAM_MIN_PLAYERS && state.teamPlayers.every(isPlayerComplete);
 }
 
 function getNextPagePath() {
   const params = new URLSearchParams(window.location.search);
-  const next = String(params.get("next") || "").trim();
-  return next || "review.html";
+  return String(params.get("next") || "").trim() || "review.html";
+}
+
+async function loadProfileDefaults() {
+  const authUser = await window.CWWAuth?.getSessionUser?.();
+  const storedIdentity = getProfileIdentityOnly();
+
+  const name = cleanIdentityName(authUser?.name) || storedIdentity.name || "Player";
+  const avatar = String(authUser?.profileImageUrl || storedIdentity.avatar || "").trim();
+
+  state.individualPlayer.name = name;
+  state.individualPlayer.avatar = avatar;
+
+  state.teamPlayers[0].name = name;
+  state.teamPlayers[0].avatar = avatar;
+
+  saveIdentityToPlayerAndBowlerSetup(
+    { name, avatar },
+    state.individualPlayer.battingStyle,
+    "Right Arm Bowler"
+  );
 }
 
 function savePlayerSetup() {
+  const players = state.mode === MODES.INDIVIDUAL ? [state.individualPlayer] : state.teamPlayers;
+
   const payload = {
     mode: state.mode,
-    players:
-      state.mode === MODES.INDIVIDUAL
-        ? [state.individualPlayer]
-        : state.teamPlayers,
-    confirmedAt: new Date().toISOString(),
+    players,
+    confirmedAt: new Date().toISOString()
   };
 
   localStorage.setItem("playerSetup", JSON.stringify(payload));
+
+  const firstPlayer = players[0] || state.individualPlayer;
+  saveIdentityToPlayerAndBowlerSetup(
+    {
+      name: firstPlayer.name,
+      avatar: firstPlayer.avatar
+    },
+    firstPlayer.battingStyle,
+    "Right Arm Bowler"
+  );
 }
 
 function confirmAndContinue() {
@@ -211,19 +261,12 @@ function setMode(nextMode) {
     state.selectedTeamPlayerId = state.teamPlayers[0]?.id || null;
   }
 
-  if (individualActive) {
-    applyProfileNameToIndividualIfEligible();
-    applyProfileAvatarToIndividualIfEligible();
-  }
-
   render();
 }
 
 function updatePlayerName(name) {
   const selected = getSelectedPlayer();
-  if (!selected) {
-    return;
-  }
+  if (!selected) return;
 
   selected.name = name;
   render();
@@ -231,9 +274,7 @@ function updatePlayerName(name) {
 
 function updateBattingStyle(style) {
   const selected = getSelectedPlayer();
-  if (!selected) {
-    return;
-  }
+  if (!selected) return;
 
   selected.battingStyle = style;
   render();
@@ -241,9 +282,7 @@ function updateBattingStyle(style) {
 
 function updateAvatar(dataUrl) {
   const selected = getSelectedPlayer();
-  if (!selected) {
-    return;
-  }
+  if (!selected) return;
 
   selected.avatar = dataUrl || "";
   render();
@@ -254,7 +293,7 @@ function addPlayer() {
     return;
   }
 
-  const created = createPlayer(`Player ${state.teamPlayers.length + 1}`);
+  const created = createPlayer("Player " + (state.teamPlayers.length + 1));
   state.teamPlayers.push(created);
   state.selectedTeamPlayerId = created.id;
   render();
@@ -266,9 +305,7 @@ function removeSelectedPlayer() {
   }
 
   const selectedIndex = state.teamPlayers.findIndex((player) => player.id === state.selectedTeamPlayerId);
-  if (selectedIndex === -1) {
-    return;
-  }
+  if (selectedIndex === -1) return;
 
   state.teamPlayers.splice(selectedIndex, 1);
   const safeIndex = Math.min(selectedIndex, state.teamPlayers.length - 1);
@@ -277,9 +314,7 @@ function removeSelectedPlayer() {
 }
 
 function selectPlayer(playerId) {
-  if (state.mode !== MODES.TEAM) {
-    return;
-  }
+  if (state.mode !== MODES.TEAM) return;
 
   state.selectedTeamPlayerId = playerId;
   render();
@@ -308,19 +343,16 @@ function renderBattingButtons(player) {
 
 function renderTitlesAndNotes() {
   const selected = getSelectedPlayer();
-  if (!selected) {
-    return;
-  }
+  if (!selected) return;
 
   const inTeamMode = state.mode === MODES.TEAM;
   const selectedIndex = inTeamMode
     ? state.teamPlayers.findIndex((player) => player.id === selected.id) + 1
     : 1;
-  const label = inTeamMode ? `Player ${selectedIndex} Details` : "Player 1 Details";
 
-  playerCardTitle.textContent = label;
+  playerCardTitle.textContent = inTeamMode ? "Player " + selectedIndex + " Details" : "Player 1 Details";
   playerFormNote.textContent = inTeamMode
-    ? `Editing ${selected.name || `Player ${selectedIndex}`}. Team must stay between ${TEAM_MIN_PLAYERS} and ${TEAM_MAX_PLAYERS} players.`
+    ? "Editing " + (selected.name || "Player " + selectedIndex) + ". Team must stay between " + TEAM_MIN_PLAYERS + " and " + TEAM_MAX_PLAYERS + " players."
     : "Individual mode is active.";
 }
 
@@ -329,7 +361,7 @@ function renderRosterControls() {
   const activePlayers = getActivePlayers();
 
   rosterCount.textContent = inTeamMode
-    ? `Players: ${activePlayers.length} / ${TEAM_MAX_PLAYERS}`
+    ? "Players: " + activePlayers.length + " / " + TEAM_MAX_PLAYERS
     : "Players: 1 / 1";
 
   rosterNote.textContent = inTeamMode
@@ -360,14 +392,14 @@ function renderRoster() {
     const avatar = document.createElement("img");
     avatar.className = "player-item-avatar";
     avatar.src = getAvatarSource(player);
-    avatar.alt = `${player.name || `Player ${index + 1}`} avatar`;
+    avatar.alt = (player.name || "Player " + (index + 1)) + " avatar";
 
     const meta = document.createElement("span");
     meta.className = "player-item-meta";
 
     const name = document.createElement("span");
     name.className = "player-item-name";
-    name.textContent = player.name || `Player ${index + 1}`;
+    name.textContent = player.name || "Player " + (index + 1);
 
     const style = document.createElement("span");
     style.className = "player-item-style";
@@ -379,9 +411,7 @@ function renderRoster() {
     item.appendChild(meta);
 
     if (inTeamMode) {
-      item.addEventListener("click", () => {
-        selectPlayer(player.id);
-      });
+      item.addEventListener("click", () => selectPlayer(player.id));
     } else {
       item.disabled = true;
     }
@@ -392,9 +422,7 @@ function renderRoster() {
 
 function renderForm() {
   const selected = getSelectedPlayer();
-  if (!selected) {
-    return;
-  }
+  if (!selected) return;
 
   playerNameInput.value = selected.name;
   renderAvatar(selected);
@@ -408,73 +436,34 @@ function render() {
   renderRoster();
 }
 
-modeIndividualButton.addEventListener("click", () => {
-  setMode(MODES.INDIVIDUAL);
-});
+modeIndividualButton.addEventListener("click", () => setMode(MODES.INDIVIDUAL));
+modeTeamButton.addEventListener("click", () => setMode(MODES.TEAM));
+addPlayerButton.addEventListener("click", addPlayer);
+removePlayerButton.addEventListener("click", removeSelectedPlayer);
 
-modeTeamButton.addEventListener("click", () => {
-  setMode(MODES.TEAM);
-});
+playerNameInput.addEventListener("input", (event) => updatePlayerName(event.target.value));
 
-addPlayerButton.addEventListener("click", () => {
-  addPlayer();
-});
-
-removePlayerButton.addEventListener("click", () => {
-  removeSelectedPlayer();
-});
-
-playerNameInput.addEventListener("input", (event) => {
-  const target = event.target;
-  if (!target) {
-    return;
-  }
-
-  if (state.mode === MODES.INDIVIDUAL) {
-    hasManualIndividualNameEdit = true;
-  }
-
-  updatePlayerName(target.value);
-});
-
-battingRightButton.addEventListener("click", () => {
-  updateBattingStyle(STYLE.RIGHT);
-});
-
-battingLeftButton.addEventListener("click", () => {
-  updateBattingStyle(STYLE.LEFT);
-});
+battingRightButton.addEventListener("click", () => updateBattingStyle(STYLE.RIGHT));
+battingLeftButton.addEventListener("click", () => updateBattingStyle(STYLE.LEFT));
 
 avatarInput.addEventListener("change", async (event) => {
-  const target = event.target;
-  const file = target?.files?.[0];
-
-  if (!file) {
-    return;
-  }
+  const file = event.target?.files?.[0];
+  if (!file) return;
 
   try {
     const imageDataUrl = await readImageFile(file);
-    if (state.mode === MODES.INDIVIDUAL) {
-      hasManualIndividualAvatarEdit = true;
-    }
     updateAvatar(imageDataUrl);
-  } catch (_error) {
+  } catch {
     updateAvatar("");
   }
 });
 
 clearAvatarButton.addEventListener("click", () => {
   avatarInput.value = "";
-  if (state.mode === MODES.INDIVIDUAL) {
-    hasManualIndividualAvatarEdit = true;
-  }
   updateAvatar("");
 });
 
-confirmContinueButton.addEventListener("click", () => {
-  confirmAndContinue();
-});
+confirmContinueButton.addEventListener("click", confirmAndContinue);
 
 async function init() {
   await loadProfileDefaults();
