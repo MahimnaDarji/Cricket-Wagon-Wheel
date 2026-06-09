@@ -7,14 +7,15 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="profile.css?v=1780978936857" />
-  </head>
+  <link rel="stylesheet" href="profile.css?v=1781032480485" />
+</head>
 <body>
   <div class="dashboard-shell">
     <header class="dash-header">
       <div class="brand-wrap">
         <h1>CreaseVision Control Desk</h1>
       </div>
+
       <div class="profile-wrap" aria-label="Account actions">
         <a class="profile-btn active" href="profile.html" aria-current="page">Profile Settings</a>
         <a class="logout-btn" href="index.html" data-logout="true">Logout</a>
@@ -23,9 +24,13 @@
 
     <main class="settings-layout" aria-label="Profile settings workspace">
       <aside class="left-panel" aria-label="Profile summary card">
-        <img id="profile-avatar-preview" class="profile-avatar" alt="Profile avatar" />
+        <div class="avatar-frame">
+          <img id="profile-avatar-preview" class="profile-avatar" alt="Profile avatar" />
+        </div>
+
         <h2 id="summary-name" class="summary-name">User</h2>
         <p id="summary-email" class="summary-email">user@example.com</p>
+
         <button id="edit-profile-btn" type="button" class="action-btn primary">Edit Profile</button>
         <a href="dashboard.html" class="action-btn secondary nav-back-btn">Back to Dashboard</a>
       </aside>
@@ -34,7 +39,7 @@
         <nav class="tabs" aria-label="Profile sections">
           <button id="tab-profile" class="tab-btn active" type="button" aria-selected="true" data-target="panel-profile">Profile Info</button>
           <button id="tab-history" class="tab-btn" type="button" aria-selected="false" data-target="panel-history">History</button>
-        <av>
+        </nav>
 
         <section id="panel-profile" class="tab-panel active" aria-label="Profile info panel">
           <article class="settings-card" aria-label="Profile info section">
@@ -77,9 +82,7 @@
     </main>
   </div>
 
-  
-  <script src="auth-header.js?v=1780975884504" defer></script>
-  <script src="profile.js?v=1780978684275" defer></script>
-
+  <script src="auth-header.js?v=1781032480485" defer></script>
+  <script src="profile.js?v=1781032480485" defer></script>
 </body>
 </html>

@@ -1,14 +1,8 @@
 (() => {
   "use strict";
 
-  const loginTab = document.getElementById("tab-login");
-  const signupTab = document.getElementById("tab-signup");
-
-  const loginPanel = document.getElementById("panel-login");
-  const signupPanel = document.getElementById("panel-signup");
-  const forgotRequestPanel = document.getElementById("panel-forgot-request");
-  const forgotVerifyPanel = document.getElementById("panel-forgot-verify");
-  const forgotResetPanel = document.getElementById("panel-forgot-reset");
+  const GOOGLE_CLIENT_ID = "1083768959991-0966srf94vcp2n2dn1m881dnbct3n1ii.apps.googleusercontent.com";
+  const GOOGLE_SCOPE = "openid email profile";
 
   const loginForm = document.getElementById("login-form");
   const signupForm = document.getElementById("signup-form");
@@ -24,13 +18,8 @@
   const loginFeedback = document.getElementById("login-feedback");
   const signupFeedback = document.getElementById("signup-feedback");
 
-  const googleLoginButton = document.querySelector('[data-google-action="login"]');
-  const googleSignupButton = document.querySelector('[data-google-action="signup"]');
-
-  const forgotPasswordTrigger = document.getElementById("forgot-password-trigger");
-  const forgotRequestBack = document.getElementById("forgot-request-back");
-  const forgotVerifyBack = document.getElementById("forgot-verify-back");
-  const forgotResetBack = document.getElementById("forgot-reset-back");
+  let googleTokenClient = null;
+  let pendingGoogleAction = "login";
 
   function normalizeEmail(value) {
     return String(value || "").trim().toLowerCase();
@@ -40,52 +29,289 @@
     return String(value || "").trim();
   }
 
-  function clearFeedback() {
-    if (loginFeedback) loginFeedback.textContent = "";
-    if (signupFeedback) signupFeedback.textContent = "";
-
-    [
-      "signup-email-error",
-      "signup-password-error",
-      "forgot-feedback",
-      "forgot-verify-feedback",
-      "forgot-reset-feedback"
-    ].forEach((id) => {
-      const element = document.getElementById(id);
-      if (element) element.textContent = "";
-    });
-  }
-
-  function showFeedback(target, message, type = "error") {
-    const element = target === "signup" ? signupFeedback : loginFeedback;
-
-    if (!element) {
-      alert(message);
+  function setFeedback(target, type, messages) {
+    if (!target) {
       return;
     }
 
-    element.textContent = message;
-    element.className = "feedback " + type;
+    target.className = "feedback state " + type;
+    target.innerHTML = messages.map((message) => "<div>" + message + "</div>").join("");
   }
 
-  function hideAllPanels() {
-    [loginPanel, signupPanel, forgotRequestPanel, forgotVerifyPanel, forgotResetPanel].forEach((panel) => {
-      if (!panel) return;
-      panel.hidden = true;
-      panel.classList.remove("active");
+  function clearFeedback(target) {
+    if (!target) {
+      return;
+    }
+
+    target.className = "feedback";
+    target.innerHTML = "";
+  }
+
+  function clearAllFeedback() {
+    clearFeedback(loginFeedback);
+    clearFeedback(signupFeedback);
+  }
+
+  function getTargetFeedback(action) {
+    return action === "signup" ? signupFeedback : loginFeedback;
+  }
+
+  function authReady() {
+    return Boolean(window.CWWAuth);
+  }
+
+  function goNext() {
+    sessionStorage.removeItem("cv_profile_setup_done");
+    window.location.href = "profile-setup.html";
+  }
+
+  function saveGoogleUser(profile) {
+    const email = normalizeEmail(profile.email);
+    const name = normalizeName(profile.name) || email.split("@")[0];
+    const profileImageUrl = String(profile.picture || "");
+
+    if (!email) {
+      return null;
+    }
+
+    const users = JSON.parse(localStorage.getItem("cv_users_v1") || "{}");
+
+    users[email] = {
+      ...(users[email] || {}),
+      id: email,
+      name,
+      email,
+      profileImageUrl,
+      password: users[email]?.password || "__google_login__",
+      savedAt: users[email]?.savedAt || new Date().toISOString()
+    };
+
+    localStorage.setItem("cv_users_v1", JSON.stringify(users));
+
+    return {
+      id: email,
+      name,
+      email,
+      profileImageUrl,
+      savedAt: users[email].savedAt
+    };
+  }
+
+  async function fetchGoogleProfile(accessToken) {
+    const response = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+      headers: {
+        Authorization: "Bearer " + accessToken
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error("Unable to fetch Google profile.");
+    }
+
+    return response.json();
+  }
+
+  async function handleGoogleTokenResponse(response) {
+    const feedback = getTargetFeedback(pendingGoogleAction);
+
+    try {
+      if (!response || !response.access_token) {
+        setFeedback(feedback, "error", ["Google sign-in was cancelled or failed."]);
+        return;
+      }
+
+      if (!authReady()) {
+        setFeedback(feedback, "error", ["Auth system is not ready. Hard refresh and try again."]);
+        return;
+      }
+
+      const profile = await fetchGoogleProfile(response.access_token);
+      const user = saveGoogleUser(profile);
+
+      if (!user) {
+        setFeedback(feedback, "error", ["Google account email was not found."]);
+        return;
+      }
+
+      window.CWWAuth.clearActiveWork();
+      window.CWWAuth.setSessionUser(user);
+      goNext();
+    } catch (error) {
+      console.error("Google sign-in failed:", error);
+      setFeedback(feedback, "error", ["Google sign-in failed. Please try again."]);
+    }
+  }
+
+  function initializeGoogleOAuth() {
+    if (!window.google || !window.google.accounts || !window.google.accounts.oauth2) {
+      window.setTimeout(initializeGoogleOAuth, 300);
+      return;
+    }
+
+    googleTokenClient = window.google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: GOOGLE_SCOPE,
+      prompt: "select_account",
+      callback: handleGoogleTokenResponse
     });
   }
 
-  function showPanel(panel) {
-    hideAllPanels();
+  function handleGoogleButtonClick(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
 
-    if (!panel) return;
+    const button = event.currentTarget;
+    pendingGoogleAction = button.dataset.googleAction === "signup" ? "signup" : "login";
 
-    panel.hidden = false;
-    panel.classList.add("active");
+    const feedback = getTargetFeedback(pendingGoogleAction);
+    clearAllFeedback();
+
+    if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_ID.includes(".apps.googleusercontent.com")) {
+      setFeedback(feedback, "error", ["Google Client ID is missing."]);
+      return;
+    }
+
+    if (!googleTokenClient) {
+      setFeedback(feedback, "error", ["Google sign-in is still loading. Try again in 2 seconds."]);
+      initializeGoogleOAuth();
+      return;
+    }
+
+    googleTokenClient.requestAccessToken({
+      prompt: "select_account"
+    });
   }
 
-  function setActiveTab(mode) {
+  function bindGoogleButtons() {
+    document.querySelectorAll("[data-google-action]").forEach((oldButton) => {
+      const newButton = oldButton.cloneNode(true);
+      oldButton.replaceWith(newButton);
+      newButton.addEventListener("click", handleGoogleButtonClick, true);
+    });
+  }
+
+  function handleLogin(event) {
+    event.preventDefault();
+    clearAllFeedback();
+
+    if (!authReady()) {
+      setFeedback(loginFeedback, "error", ["Auth system is not ready. Hard refresh and try again."]);
+      return;
+    }
+
+    const email = normalizeEmail(loginEmailInput?.value);
+    const password = String(loginPasswordInput?.value || "");
+
+    if (!email) {
+      setFeedback(loginFeedback, "error", ["Please enter your email."]);
+      return;
+    }
+
+    if (!password) {
+      setFeedback(loginFeedback, "error", ["Please enter your password."]);
+      return;
+    }
+
+    const result = window.CWWAuth.loginUser({ email, password });
+
+    if (!result.ok) {
+      setFeedback(loginFeedback, "error", [result.message || "Unable to login."]);
+      return;
+    }
+
+    window.CWWAuth.clearActiveWork();
+    goNext();
+  }
+
+  function handleSignup(event) {
+    event.preventDefault();
+    clearAllFeedback();
+
+    if (!authReady()) {
+      setFeedback(signupFeedback, "error", ["Auth system is not ready. Hard refresh and try again."]);
+      return;
+    }
+
+    const name = normalizeName(signupNameInput?.value);
+    const email = normalizeEmail(signupEmailInput?.value);
+    const password = String(signupPasswordInput?.value || "");
+    const confirmPassword = String(signupConfirmPasswordInput?.value || "");
+
+    if (!name) {
+      setFeedback(signupFeedback, "error", ["Please enter your name."]);
+      return;
+    }
+
+    if (!email) {
+      setFeedback(signupFeedback, "error", ["Please enter your email."]);
+      return;
+    }
+
+    if (!password) {
+      setFeedback(signupFeedback, "error", ["Please create a password."]);
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setFeedback(signupFeedback, "error", ["Passwords do not match."]);
+      return;
+    }
+
+    const result = window.CWWAuth.registerUser({ name, email, password });
+
+    if (!result.ok) {
+      setFeedback(signupFeedback, "error", [result.message || "Unable to create account."]);
+      return;
+    }
+
+    window.CWWAuth.clearActiveWork();
+    goNext();
+  }
+
+  function bindForms() {
+    loginForm?.addEventListener("submit", handleLogin);
+    signupForm?.addEventListener("submit", handleSignup);
+  }
+
+  function init() {
+    bindForms();
+    bindGoogleButtons();
+    initializeGoogleOAuth();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+})();
+
+
+/* CV_AUTH_TAB_SWITCH_FIX_START */
+(() => {
+  "use strict";
+
+  function get(id) {
+    return document.getElementById(id);
+  }
+
+  function clearFeedback() {
+    ["login-feedback", "signup-feedback"].forEach((id) => {
+      const element = get(id);
+      if (!element) return;
+      element.className = "feedback";
+      element.innerHTML = "";
+      element.textContent = "";
+    });
+  }
+
+  function showPanel(mode) {
+    const loginTab = get("tab-login");
+    const signupTab = get("tab-signup");
+    const loginPanel = get("panel-login");
+    const signupPanel = get("panel-signup");
+
     const isLogin = mode === "login";
 
     if (loginTab) {
@@ -98,219 +324,79 @@
       signupTab.setAttribute("aria-selected", String(!isLogin));
     }
 
-    showPanel(isLogin ? loginPanel : signupPanel);
-    clearFeedback();
-  }
-
-  function ensureAuthReady(target = "login") {
-    if (!window.CWWAuth) {
-      showFeedback(target, "Auth system is not ready. Hard refresh the page and try again.");
-      return false;
-    }
-
-    return true;
-  }
-
-  function setupDoneKey(email) {
-    return "cv_profile_setup_done::" + normalizeEmail(email);
-  }
-
-  function goAfterAuth(user, forceSetup = false) {
-    const email = normalizeEmail(user && user.email);
-
-    if (!email) {
-      window.location.href = "profile-setup.html";
-      return;
-    }
-
-    const setupDone = localStorage.getItem(setupDoneKey(email)) === "1";
-
-    if (forceSetup || !setupDone) {
-      window.location.href = "profile-setup.html";
-      return;
-    }
-
-    window.location.href = "dashboard.html";
-  }
-
-  function handleLogin(event) {
-    event.preventDefault();
-    clearFeedback();
-
-    if (!ensureAuthReady("login")) return;
-
-    const email = normalizeEmail(loginEmailInput && loginEmailInput.value);
-    const password = String((loginPasswordInput && loginPasswordInput.value) || "");
-
-    if (!email) {
-      showFeedback("login", "Please enter your email.");
-      return;
-    }
-
-    if (!password) {
-      showFeedback("login", "Please enter your password.");
-      return;
-    }
-
-    const result = window.CWWAuth.loginUser({ email, password });
-
-    if (!result.ok) {
-      showFeedback("login", result.message || "Unable to login.");
-      return;
-    }
-
-    window.CWWAuth.clearActiveWork();
-    sessionStorage.removeItem("cv_profile_setup_done");
-
-    showFeedback("login", "Login successful.", "success");
-    goAfterAuth(result.user, false);
-  }
-
-  function handleSignup(event) {
-    event.preventDefault();
-    clearFeedback();
-
-    if (!ensureAuthReady("signup")) return;
-
-    const name = normalizeName(signupNameInput && signupNameInput.value);
-    const email = normalizeEmail(signupEmailInput && signupEmailInput.value);
-    const password = String((signupPasswordInput && signupPasswordInput.value) || "");
-    const confirmPassword = String((signupConfirmPasswordInput && signupConfirmPasswordInput.value) || "");
-
-    if (!name) {
-      showFeedback("signup", "Please enter your name.");
-      return;
-    }
-
-    if (!email) {
-      showFeedback("signup", "Please enter your email.");
-      return;
-    }
-
-    if (!password) {
-      showFeedback("signup", "Please create a password.");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      showFeedback("signup", "Passwords do not match.");
-      return;
-    }
-
-    const result = window.CWWAuth.registerUser({ name, email, password });
-
-    if (!result.ok) {
-      showFeedback("signup", result.message || "Unable to create account.");
-      return;
-    }
-
-    window.CWWAuth.clearActiveWork();
-    sessionStorage.removeItem("cv_profile_setup_done");
-
-    showFeedback("signup", "Account created successfully.", "success");
-    goAfterAuth(result.user, true);
-  }
-
-  function handleGoogleAuth(mode) {
-    clearFeedback();
-
-    if (!ensureAuthReady(mode === "signup" ? "signup" : "login")) return;
-
-    const email = normalizeEmail(prompt("Enter Google account email"));
-
-    if (!email) return;
-
-    const users = JSON.parse(localStorage.getItem("cv_users_v1") || "{}");
-    const existing = users[email];
-
-    if (existing) {
-      const result = window.CWWAuth.loginUser({
-        email,
-        password: existing.password || "__google__"
-      });
-
-      if (!result.ok) {
-        showFeedback("login", result.message || "Unable to login with Google.");
-        return;
+    if (loginPanel) {
+      loginPanel.classList.toggle("active", isLogin);
+      if (isLogin) {
+        loginPanel.removeAttribute("hidden");
+      } else {
+        loginPanel.setAttribute("hidden", "true");
       }
-
-      window.CWWAuth.clearActiveWork();
-      sessionStorage.removeItem("cv_profile_setup_done");
-      goAfterAuth(result.user, false);
-      return;
     }
 
-    const name = normalizeName(prompt("Enter your full name")) || email.split("@")[0];
+    if (signupPanel) {
+      signupPanel.classList.toggle("active", !isLogin);
+      if (!isLogin) {
+        signupPanel.removeAttribute("hidden");
+      } else {
+        signupPanel.setAttribute("hidden", "true");
+      }
+    }
 
-    const result = window.CWWAuth.registerUser({
-      name,
-      email,
-      password: "__google__"
+    ["panel-forgot-request", "panel-forgot-verify", "panel-forgot-reset"].forEach((id) => {
+      const panel = get(id);
+      if (!panel) return;
+      panel.classList.remove("active");
+      panel.setAttribute("hidden", "true");
     });
 
-    if (!result.ok) {
-      showFeedback("signup", result.message || "Unable to sign up with Google.");
-      return;
+    const authToggle = document.querySelector(".auth-toggle");
+    if (authToggle) {
+      authToggle.hidden = false;
     }
 
-    window.CWWAuth.clearActiveWork();
-    sessionStorage.removeItem("cv_profile_setup_done");
-    goAfterAuth(result.user, true);
+    clearFeedback();
   }
 
-  function bindForgotPasswordBasicNavigation() {
-    if (forgotPasswordTrigger) {
-      forgotPasswordTrigger.addEventListener("click", () => {
-        hideAllPanels();
-        if (forgotRequestPanel) {
-          forgotRequestPanel.hidden = false;
-          forgotRequestPanel.classList.add("active");
-        }
-      });
-    }
+  function bindAuthTabs() {
+    const loginTab = get("tab-login");
+    const signupTab = get("tab-signup");
 
-    [forgotRequestBack, forgotVerifyBack, forgotResetBack].forEach((button) => {
-      if (!button) return;
-      button.addEventListener("click", () => setActiveTab("login"));
-    });
-  }
-
-  function bindEvents() {
     if (loginTab) {
-      loginTab.addEventListener("click", () => setActiveTab("login"));
+      loginTab.onclick = (event) => {
+        event.preventDefault();
+        showPanel("login");
+      };
     }
 
     if (signupTab) {
-      signupTab.addEventListener("click", () => setActiveTab("signup"));
+      signupTab.onclick = (event) => {
+        event.preventDefault();
+        showPanel("signup");
+      };
     }
 
-    if (loginForm) {
-      loginForm.addEventListener("submit", handleLogin);
+    const signupSubmit = document.querySelector('button[form="signup-form"]');
+    const loginSubmit = document.querySelector('button[form="login-form"]');
+
+    if (signupSubmit) {
+      signupSubmit.disabled = false;
+      signupSubmit.removeAttribute("disabled");
+      signupSubmit.style.pointerEvents = "auto";
+      signupSubmit.style.opacity = "1";
     }
 
-    if (signupForm) {
-      signupForm.addEventListener("submit", handleSignup);
+    if (loginSubmit) {
+      loginSubmit.disabled = false;
+      loginSubmit.removeAttribute("disabled");
+      loginSubmit.style.pointerEvents = "auto";
+      loginSubmit.style.opacity = "1";
     }
-
-    if (googleLoginButton) {
-      googleLoginButton.addEventListener("click", () => handleGoogleAuth("login"));
-    }
-
-    if (googleSignupButton) {
-      googleSignupButton.addEventListener("click", () => handleGoogleAuth("signup"));
-    }
-
-    bindForgotPasswordBasicNavigation();
-  }
-
-  function init() {
-    bindEvents();
-    setActiveTab("login");
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
+    document.addEventListener("DOMContentLoaded", bindAuthTabs);
   } else {
-    init();
+    bindAuthTabs();
   }
 })();
+/* CV_AUTH_TAB_SWITCH_FIX_END */

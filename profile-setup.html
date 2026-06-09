@@ -137,7 +137,7 @@
       }
     }
   </style>
-</head>
+  <link rel="stylesheet" href="profile-setup.css?v=1781031190265" /></head>
 
 <body>
   <div class="dashboard-shell">
@@ -341,5 +341,54 @@
       waitForAuth(init);
     })();
   </script>
+
+<script id="cv-profile-setup-blank-dp-fix">
+(() => {
+  "use strict";
+
+  const blankAvatar = "data:image/svg+xml;charset=UTF-8,%0A%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20160%20160%22%3E%0A%20%20%3Crect%20width%3D%22160%22%20height%3D%22160%22%20rx%3D%2280%22%20fill%3D%22%23f6f3ea%22%2F%3E%0A%20%20%3Ccircle%20cx%3D%2280%22%20cy%3D%2258%22%20r%3D%2222%22%20fill%3D%22%23d5dccd%22%2F%3E%0A%20%20%3Cpath%20d%3D%22M34%20136c7-29%2026-45%2046-45s39%2016%2046%2045%22%20fill%3D%22%23d5dccd%22%2F%3E%0A%3C%2Fsvg%3E";
+
+  function looksEmptyImage(img) {
+    const src = String(img.getAttribute("src") || "").trim();
+    return !src || src === "#" || src === "null" || src === "undefined";
+  }
+
+  function applyBlankAvatar(img) {
+    if (!img) return;
+
+    if (looksEmptyImage(img)) {
+      img.src = blankAvatar;
+      img.dataset.cvBlankAvatar = "true";
+    }
+
+    img.alt = "";
+    img.style.fontSize = "0";
+    img.style.color = "transparent";
+    img.style.textIndent = "-9999px";
+
+    img.addEventListener("error", () => {
+      img.src = blankAvatar;
+      img.dataset.cvBlankAvatar = "true";
+    });
+  }
+
+  function fixProfileSetupBlankDp() {
+    document
+      .querySelectorAll(
+        ".profile-avatar, .avatar-preview, #profile-avatar-preview, #avatar-preview, #setup-avatar-preview, img[alt*='avatar' i], img[alt*='profile' i]"
+      )
+      .forEach(applyBlankAvatar);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", fixProfileSetupBlankDp);
+  } else {
+    fixProfileSetupBlankDp();
+  }
+
+  window.addEventListener("pageshow", fixProfileSetupBlankDp);
+})();
+</script>
+
 </body>
 </html>
