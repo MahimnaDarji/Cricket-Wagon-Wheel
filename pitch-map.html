@@ -9,6 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="dashboard.css" />
   <link rel="stylesheet" href="pitch-map.css?v=1780286735273" />
+  <script src="cv-storage-privacy-guard.js"></script>
 </head>
 <body>
   <div class="dashboard-shell">
@@ -70,7 +71,7 @@
             <p class="setup-label">Export Pitch Map</p>
             <p class="live-line">Bowling completed. Download a clean pitch map image.</p>
             <button id="download-image-btn" type="button" class="wagon-wheel-action-btn">Download Image</button>
-            <button id="return-dashboard-btn" type="button" class="wagon-wheel-action-btn complete">Save Pitch Map</button>
+            <button id="return-dashboard-btn" type="button" class="wagon-wheel-action-btn complete">Return to Dashboard</button>
           </section>
 
           <button id="pitch-map-back-btn" type="button" class="panel-back-btn">Back</button>
@@ -139,12 +140,8 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
-  <script src="auth-header.js" defer></script>
-  <script src="pitch-map.js?v=1780376525005" defer></script>
-  <script src="pitch-map-export.js" defer></script>
-
-<script id="cv-pitch-profile-sync">
+  <script src="https://cdn.jsdelivr.netpm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
+  <script id="cv-pitch-profile-sync">
 (function () {
   function parseJson(value, fallback) {
     try {
@@ -156,7 +153,7 @@
   }
 
   function getIdentity() {
-    const playerSetup = parseJson(localStorage.getItem("playerSetup"), null);
+    const playerSetup = parseJson(localStorage.getItem(CWWScopedKey("playerSetup")), null);
 
     if (playerSetup && Array.isArray(playerSetup.players) && playerSetup.players.length > 0) {
       const player = playerSetup.players[0] || {};
@@ -184,14 +181,14 @@
     }
 
     return {
-      name: String(localStorage.getItem("profileName") || "").trim(),
-      avatar: String(localStorage.getItem("profileImageUrl") || "").trim()
+      name: String(localStorage.getItem(CWWScopedKey("profileName")) || "").trim(),
+      avatar: String(localStorage.getItem(CWWScopedKey("profileImageUrl")) || "").trim()
     };
   }
 
   function applyPitchIdentity() {
     const identity = getIdentity();
-    const bowlers = parseJson(localStorage.getItem("creasevisionBowlers"), []);
+    const bowlers = parseJson(localStorage.getItem(CWWScopedKey("creasevisionBowlers")), []);
     const safeBowlers = Array.isArray(bowlers) ? bowlers : [];
     const existing = safeBowlers[0] || {};
 
@@ -203,9 +200,9 @@
     };
 
     safeBowlers[0] = bowler;
-    localStorage.setItem("creasevisionBowlerMode", "individual");
-    localStorage.setItem("creasevisionSelectedBowlerIndex", "0");
-    localStorage.setItem("creasevisionBowlers", JSON.stringify([bowler]));
+    localStorage.setItem(CWWScopedKey("creasevisionBowlerMode"), "individual");
+    localStorage.setItem(CWWScopedKey("creasevisionSelectedBowlerIndex"), "0");
+    localStorage.setItem(CWWScopedKey("creasevisionBowlers"), JSON.stringify([bowler]));
 
     const nameElement = document.getElementById("bowler-name-display");
     const styleElement = document.getElementById("bowler-style-display");
@@ -241,7 +238,263 @@
   window.addEventListener("pageshow", applyPitchIdentity);
 })();
 </script>
-</body>
+
+  <script src="auth-header.js?v=1780971767421" defer></script>
+  <script src="pitch-map.js?v=1780971880682" defer></script>
+  <script src="pitch-map-export.js?v=1780973584258" defer></script>
+
+
+<script id="cv-force-pitch-return-dashboard">
+(() => {
+  "use strict";
+
+  function clearActivePitchMapSession() {
+    [
+      "creasevisionPitchDeliveries",
+      "latestPitchMapInnings",
+      "pitchMapInnings",
+      "pitchMapDeliveries",
+      "currentPitchMapDeliveries",
+      "activePitchMapDeliveries",
+      "pitch_map_history_view_record_id"
+    ].forEach((key) => {
+      try {
+        sessionStorage.removeItem(key);
+        localStorage.removeItem(key);
+      } catch {}
+    });
+
+    document.querySelectorAll(".pitch-dot, .delivery-dot, .ball-dot, [data-delivery-dot]").forEach((dot) => {
+      dot.remove();
+    });
+  }
+
+  function isReturnDashboardClick(target) {
+    const button = target.closest("button, a");
+
+    if (!button) {
+      return false;
+    }
+
+    const text = String(button.textContent || "").trim().toLowerCase();
+
+    return (
+      text === "return to dashboard" ||
+      text === "save pitch map" ||
+      text.includes("return to dashboard")
+    );
+  }
+
+  document.addEventListener("click", (event) => {
+    if (!isReturnDashboardClick(event.target)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+
+    clearActivePitchMapSession();
+    window.location.href = "dashboard.html";
+  }, true);
+
+  document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll("button, a").forEach((element) => {
+      const text = String(element.textContent || "").trim().toLowerCase();
+
+      if (text === "save pitch map" || text.includes("return to dashboard")) {
+        element.textContent = "Return to Dashboard";
+        element.removeAttribute("disabled");
+        element.setAttribute("aria-disabled", "false");
+      }
+    });
+  });
+})();
+</script>
+
+
+
+
+
+<script id="cv-final-pitch-complete-flow">
+(() => {
+  "use strict";
+
+  function byId(id) {
+    return document.getElementById(id);
+  }
+
+  function cloneButton(id) {
+    const oldButton = byId(id);
+
+    if (!oldButton) {
+      return null;
+    }
+
+    const newButton = oldButton.cloneNode(true);
+    oldButton.replaceWith(newButton);
+    return newButton;
+  }
+
+  function showBlock(element) {
+    if (!element) {
+      return;
+    }
+
+    element.classList.remove("is-hidden");
+    element.removeAttribute("hidden");
+    element.style.setProperty("display", "grid", "important");
+    element.style.setProperty("visibility", "visible", "important");
+    element.style.setProperty("opacity", "1", "important");
+    element.style.setProperty("pointer-events", "auto", "important");
+  }
+
+  function hideBlock(element) {
+    if (!element) {
+      return;
+    }
+
+    element.classList.add("is-hidden");
+    element.style.removeProperty("display");
+  }
+
+  function savePitchMapHistory() {
+    try {
+      if (
+        typeof window.buildCompletedPitchMapRecord === "function" &&
+        typeof window.appendPitchMapToHistory === "function"
+      ) {
+        const record = window.buildCompletedPitchMapRecord();
+
+        if (record && Array.isArray(record.deliveries) && record.deliveries.length > 0) {
+          window.appendPitchMapToHistory(record);
+        }
+      }
+    } catch (error) {
+      console.error("Pitch map history save failed:", error);
+    }
+  }
+
+  function clearPitchMapSession() {
+    [
+      "creasevisionPitchDeliveries",
+      "latestPitchMapInnings",
+      "pitchMapInnings",
+      "pitchMapDeliveries",
+      "currentPitchMapDeliveries",
+      "activePitchMapDeliveries",
+      "pitch_map_history_view_record_id"
+    ].forEach((key) => {
+      try {
+        sessionStorage.removeItem(key);
+        localStorage.removeItem(key);
+      } catch {}
+    });
+
+    try {
+      if (typeof window.resetPitchMapForNewInnings === "function") {
+        window.resetPitchMapForNewInnings();
+      }
+    } catch {}
+  }
+
+  function bindCleanFlow() {
+    const completeButton = cloneButton("complete-bowling-btn");
+    const noButton = cloneButton("confirm-innings-no");
+    const yesButton = cloneButton("confirm-innings-yes");
+    const returnButton = cloneButton("return-dashboard-btn");
+
+    const modal = byId("innings-confirm-modal");
+    const exportBlock = byId("download-export-block");
+
+    if (completeButton) {
+      completeButton.disabled = false;
+      completeButton.removeAttribute("disabled");
+      completeButton.style.pointerEvents = "auto";
+      completeButton.style.opacity = "1";
+
+      completeButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        showBlock(modal);
+      }, true);
+    }
+
+    if (noButton) {
+      noButton.disabled = false;
+      noButton.removeAttribute("disabled");
+
+      noButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        hideBlock(modal);
+      }, true);
+    }
+
+    if (yesButton) {
+      yesButton.disabled = false;
+      yesButton.removeAttribute("disabled");
+
+      yesButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+
+        hideBlock(modal);
+        savePitchMapHistory();
+        showBlock(exportBlock);
+
+        const downloadButton = byId("download-image-btn");
+        const finalReturnButton = byId("return-dashboard-btn");
+
+        if (downloadButton) {
+          downloadButton.disabled = false;
+          downloadButton.removeAttribute("disabled");
+          downloadButton.style.pointerEvents = "auto";
+          downloadButton.style.opacity = "1";
+          downloadButton.textContent = "Download Image";
+        }
+
+        if (finalReturnButton) {
+          finalReturnButton.disabled = false;
+          finalReturnButton.removeAttribute("disabled");
+          finalReturnButton.style.pointerEvents = "auto";
+          finalReturnButton.style.opacity = "1";
+          finalReturnButton.textContent = "Return to Dashboard";
+        }
+      }, true);
+    }
+
+    if (returnButton) {
+      returnButton.textContent = "Return to Dashboard";
+      returnButton.disabled = false;
+      returnButton.removeAttribute("disabled");
+
+      returnButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+
+        clearPitchMapSession();
+        window.location.href = "dashboard.html";
+      }, true);
+    }
+
+    if (exportBlock) {
+      exportBlock.removeAttribute("hidden");
+    }
+  }
+
+  window.addEventListener("load", () => {
+    bindCleanFlow();
+    window.setTimeout(bindCleanFlow, 150);
+    window.setTimeout(bindCleanFlow, 500);
+  });
+})();
+</script>
+\n</body>
 </html>
 
 

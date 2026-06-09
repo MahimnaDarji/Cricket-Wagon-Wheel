@@ -7,8 +7,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="review.css?v=1780286856417" />
-</head>
+  <link rel="stylesheet" href="review.css?v=1780970671303" />
+  </head>
 <body>
   <div class="dashboard-shell">
     <header class="dash-header">
@@ -52,6 +52,9 @@
           <p class="control-note">Choose a run, mark your shot on the ground, then save each ball.</p>
           <button id="wagon-wheel-toggle" type="button" class="wagon-wheel-toggle" aria-pressed="false">
             Select Runs
+          </button>
+          <button id="undo-shot-main-btn" type="button" class="wagon-wheel-toggle">
+            Undo
           </button>
           <p id="run-selection-status" class="live-line run-selection-status">Neutral: Run selection is not enabled yet.</p>
           <div id="run-options-panel" class="run-options-panel is-hidden" aria-label="Run options">
@@ -124,7 +127,9 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
-  <script src="auth-header.js" defer></script>
-  <script src="review.js?v=1780287586390" defer></script>
+  
+  <script src="auth-header.js?v=1780969981660" defer></script>
+  <script src="review.js?v=1780970586481" defer></script>
+
 </body>
 </html>

@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="player-setup.css" />
-</head>
+  </head>
 <body>
   <div class="dashboard-shell">
     <header class="dash-header">
@@ -46,7 +46,7 @@
           </div>
 
           <label class="setup-field-label" for="player-name">Player Name</label>
-          <input id="player-name" class="setup-input" type="text" placeholder="Enter player name" maxlength="40" />
+          <input id="player-name" class="setup-input" type="text" placeholder="Enter your name here" maxlength="40" autocomplete="off" />
 
           <p class="setup-field-label">Batting Style</p>
           <div class="batting-toggle" role="radiogroup" aria-label="Batting style selection">
@@ -62,7 +62,7 @@
         </section>
 
         <section class="setup-block" aria-label="Confirm player setup">
-          <button id="confirm-continue" class="mode-btn active confirm-btn" type="button" disabled>Confirm &amp; Continue</button>
+          <button id="confirm-continue" class="mode-btn active confirm-btn" type="button">Confirm &amp; Continue</button>
         </section>
 
         <button type="button" class="panel-back-btn" onclick="window.history.back()">Back</button>
@@ -86,7 +86,9 @@
     </main>
   </div>
 
-  <script src="auth-header.js" defer></script>
-  <script src="player-setup.js?v=1780285890958" defer></script>
+  
+  <script src="auth-header.js?v=1780969798369" defer></script>
+  <script src="player-setup.js?v=1780969798369" defer></script>
+
 </body>
 </html>

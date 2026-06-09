@@ -1,4 +1,125 @@
-﻿const playerSelectorBlock = document.getElementById("player-selector-block");
+
+/* CREASEVISION REVIEW PRIVACY STORAGE SHIM */
+(() => {
+  "use strict";
+
+  if (window.__CV_REVIEW_STORAGE_SHIM_ACTIVE__) {
+    return;
+  }
+
+  window.__CV_REVIEW_STORAGE_SHIM_ACTIVE__ = true;
+
+  const originalGetItem = localStorage.getItem.bind(localStorage);
+  const originalSetItem = localStorage.setItem.bind(localStorage);
+  const originalRemoveItem = localStorage.removeItem.bind(localStorage);
+
+  function safeParse(value, fallback) {
+    try {
+      return value ? JSON.parse(value) : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  function getUserKey() {
+    if (window.CWWAuth && typeof window.CWWAuth.getCurrentUserKey === "function") {
+      return String(window.CWWAuth.getCurrentUserKey() || "").trim().toLowerCase();
+    }
+
+    const sessionUser =
+      safeParse(sessionStorage.getItem("cv_session_user_v1"), null) ||
+      safeParse(originalGetItem("cww_session_user"), null) ||
+      safeParse(originalGetItem("currentUser"), null);
+
+    return String(sessionUser?.email || sessionUser?.id || "").trim().toLowerCase();
+  }
+
+  function scopedKey(key) {
+    const userKey = getUserKey();
+
+    if (!userKey) {
+      return "";
+    }
+
+    return "cv_user::" + userKey + "::" + key;
+  }
+
+  function isWagonHistoryKey(key) {
+    return key === "wagonWheelHistory";
+  }
+
+  function isCurrentSessionKey(key) {
+    return key === "playerSetup" || key === "wagonWheelInnings";
+  }
+
+  localStorage.getItem = function patchedGetItem(key) {
+    if (isWagonHistoryKey(key)) {
+      const scoped = scopedKey(key);
+
+      if (scoped) {
+        const scopedValue = originalGetItem(scoped);
+
+        if (scopedValue !== null && scopedValue !== undefined) {
+          return scopedValue;
+        }
+
+        return "[]";
+      }
+    }
+
+    if (isCurrentSessionKey(key)) {
+      const sessionValue = sessionStorage.getItem(key);
+
+      if (sessionValue !== null && sessionValue !== undefined && sessionValue !== "") {
+        return sessionValue;
+      }
+    }
+
+    return originalGetItem(key);
+  };
+
+  localStorage.setItem = function patchedSetItem(key, value) {
+    if (isWagonHistoryKey(key)) {
+      const scoped = scopedKey(key);
+
+      if (scoped) {
+        originalSetItem(scoped, String(value));
+      }
+
+      return;
+    }
+
+    if (isCurrentSessionKey(key)) {
+      sessionStorage.setItem(key, String(value));
+      originalSetItem(key, String(value));
+      return;
+    }
+
+    originalSetItem(key, value);
+  };
+
+  localStorage.removeItem = function patchedRemoveItem(key) {
+    if (isWagonHistoryKey(key)) {
+      const scoped = scopedKey(key);
+
+      if (scoped) {
+        originalRemoveItem(scoped);
+      }
+
+      return;
+    }
+
+    if (isCurrentSessionKey(key)) {
+      sessionStorage.removeItem(key);
+      originalRemoveItem(key);
+      return;
+    }
+
+    originalRemoveItem(key);
+  };
+})();
+
+const playerSelectorBlock = document.getElementById("player-selector-block");
 const playerSelectorDropdown = document.getElementById("player-selector-dropdown");
 const modeLine = document.getElementById("mode-line");
 const playerCountLine = document.getElementById("player-count-line");
@@ -52,6 +173,48 @@ const DEBUG_HISTORY = false;
 const HISTORY_VIEW_RECORD_KEY = "cww_history_view_record_id";
 const HISTORY_AUTO_EXPORT_KEY = "cww_history_auto_export";
 const HISTORY_EXPORT_EVENT = "cww-history-export-ready";
+
+
+function getSessionFirstValue(key) {
+  const sessionValue = sessionStorage.getItem(key);
+  if (sessionValue !== null && sessionValue !== undefined && sessionValue !== "") {
+    return sessionValue;
+  }
+
+  return localStorage.getItem(key);
+}
+
+function getScopedWagonWheelHistory() {
+  if (window.CWWAuth && typeof window.CWWAuth.scopedGet === "function") {
+    const scopedHistory = window.CWWAuth.scopedGet("wagonWheelHistory", []);
+    if (Array.isArray(scopedHistory)) {
+      return scopedHistory;
+    }
+  }
+
+  const legacyHistory = safeParse(localStorage.getItem("wagonWheelHistory") || "[]");
+  return Array.isArray(legacyHistory) ? legacyHistory : [];
+}
+
+function setScopedWagonWheelHistory(history) {
+  const safeHistory = Array.isArray(history) ? history : [];
+
+  if (window.CWWAuth && typeof window.CWWAuth.scopedSet === "function") {
+    window.CWWAuth.scopedSet("wagonWheelHistory", safeHistory);
+  }
+
+  localStorage.setItem("wagonWheelHistory", JSON.stringify(safeHistory));
+}
+
+function saveActiveWagonWheelInnings(payload) {
+  sessionStorage.setItem("wagonWheelInnings", JSON.stringify(payload));
+  localStorage.setItem("wagonWheelInnings", JSON.stringify(payload));
+}
+
+function clearActiveWagonWheelInnings() {
+  sessionStorage.removeItem("wagonWheelInnings");
+  localStorage.removeItem("wagonWheelInnings");
+}
 
 const groundCircle = document.querySelector(".ground-circle");
 const groundStage = document.querySelector(".ground-stage");
@@ -126,18 +289,16 @@ let exportRootNode = null;
 
 function getHistoryRecordForView() {
   const requestedId = String(localStorage.getItem(HISTORY_VIEW_RECORD_KEY) || "").trim();
+
   if (!requestedId) {
     return null;
   }
 
-  const historyList = safeParse(localStorage.getItem("wagonWheelHistory") || "[]");
-  if (!Array.isArray(historyList)) {
-    localStorage.removeItem(HISTORY_VIEW_RECORD_KEY);
-    return null;
-  }
+  const historyList = getScopedWagonWheelHistory();
 
   const selectedRecord = historyList.find((entry) => String(entry?.id || "") === requestedId);
   localStorage.removeItem(HISTORY_VIEW_RECORD_KEY);
+
   return selectedRecord && typeof selectedRecord === "object" ? selectedRecord : null;
 }
 
@@ -299,21 +460,16 @@ function normalizePlayer(player, index) {
 function getFallbackAvatarForHistory(playerId) {
   const normalizedPlayerId = String(playerId || "").trim();
 
-  const playerSetup = safeParse(localStorage.getItem("playerSetup") || "");
+  const playerSetup = safeParse(getSessionFirstValue("playerSetup") || "");
   if (playerSetup && Array.isArray(playerSetup.players)) {
     const matchingPlayer = playerSetup.players.find(
       (entry) => String(entry?.id || "").trim() === normalizedPlayerId
     );
+
     const setupAvatar = String(matchingPlayer?.avatar || "").trim();
     if (setupAvatar) {
       return setupAvatar;
     }
-  }
-
-  const sessionUser = safeParse(localStorage.getItem("cww_session_user") || "");
-  const sessionAvatar = String(sessionUser?.profileImageUrl || "").trim();
-  if (sessionAvatar) {
-    return sessionAvatar;
   }
 
   return "";
@@ -328,9 +484,9 @@ function loadState() {
 
   state.isHistoryDetailView = false;
   state.viewedInningsSavedAt = "";
-  const playerSetup = safeParse(localStorage.getItem("playerSetup") || "");
-  const groundSetup = safeParse(localStorage.getItem("groundSetup") || "");
-  const inningsSetup = safeParse(localStorage.getItem("wagonWheelInnings") || "");
+  const playerSetup = safeParse(getSessionFirstValue("playerSetup") || "");
+  const groundSetup = safeParse(getSessionFirstValue("groundSetup") || "");
+  const inningsSetup = safeParse(getSessionFirstValue("wagonWheelInnings") || "");
 
   let playerConfirmedAtMs = 0;
   if (playerSetup?.confirmedAt) {
@@ -491,6 +647,47 @@ function loadState() {
         return acc;
       }, {});
     }
+  }
+}
+
+
+function applyCurrentPlayerSetupFromSession() {
+  if (state.isHistoryDetailView) {
+    return;
+  }
+
+  const playerSetup = safeParse(getSessionFirstValue("playerSetup") || "");
+
+  if (playerSetup && Array.isArray(playerSetup.players) && playerSetup.players.length > 0) {
+    const mode = playerSetup.mode === "team" ? "team" : "individual";
+    const players = playerSetup.players.map((player, index) => normalizePlayer(player, index));
+
+    state.mode = mode;
+    state.players = mode === "individual" ? [players[0]] : players;
+    state.selectedPlayerId = state.players[0]?.id || null;
+    return;
+  }
+
+  const sessionUser =
+    safeParse(sessionStorage.getItem("cv_session_user_v1") || "") ||
+    safeParse(localStorage.getItem("cww_session_user") || "") ||
+    safeParse(localStorage.getItem("currentUser") || "") ||
+    safeParse(localStorage.getItem("creasevisionUserProfile") || "");
+
+  const fallbackName = String(sessionUser?.name || "").trim();
+  const fallbackAvatar = String(sessionUser?.profileImageUrl || "").trim();
+
+  if (fallbackName || fallbackAvatar) {
+    state.mode = "individual";
+    state.players = [
+      normalizePlayer({
+        id: "player-1",
+        name: fallbackName || "Player",
+        battingStyle: "right",
+        avatar: fallbackAvatar
+      }, 0)
+    ];
+    state.selectedPlayerId = state.players[0].id;
   }
 }
 
@@ -823,7 +1020,7 @@ function buildCompletedInningsRecord() {
 function saveInningsState() {
   const payload = buildCompletedInningsRecord();
 
-  localStorage.setItem("wagonWheelInnings", JSON.stringify(payload));
+  saveActiveWagonWheelInnings(payload);
 
   return payload;
 }
@@ -833,14 +1030,7 @@ function appendInningsToHistory(record) {
     return;
   }
 
-  const history = (() => {
-    try {
-      const existing = JSON.parse(localStorage.getItem("wagonWheelHistory") || "[]");
-      return Array.isArray(existing) ? existing : [];
-    } catch {
-      return [];
-    }
-  })();
+  const history = getScopedWagonWheelHistory();
 
   const normalized = {
     ...record,
@@ -856,11 +1046,7 @@ function appendInningsToHistory(record) {
   const deduped = history.filter((entry) => String(entry?.id || "") !== normalized.id);
   deduped.unshift(normalized);
 
-  if (DEBUG_HISTORY) {
-    console.log("[History Debug] saving record", normalized);
-  }
-
-  localStorage.setItem("wagonWheelHistory", JSON.stringify(deduped.slice(0, 50)));
+  setScopedWagonWheelHistory(deduped.slice(0, 50));
 }
 
 function saveCurrentBallAndResetSelection() {
@@ -915,6 +1101,7 @@ function completeInningsAndContinue() {
 
   const completedRecord = saveInningsState();
   appendInningsToHistory(completedRecord);
+
   if (downloadExportBlock) {
     downloadExportBlock.classList.remove("is-hidden");
   }
@@ -1017,24 +1204,78 @@ function createExportContainer() {
 
 async function downloadWagonWheelImage() {
   if (typeof window.html2canvas !== "function") {
+    alert("Download tool is still loading. Please wait for 2 seconds and try again.");
     return;
   }
 
   const exportContainer = createExportContainer();
-  const canvas = await window.html2canvas(exportContainer, {
-    scale: 3,
-    useCORS: true,
-    backgroundColor: null,
-  });
+
+  let canvas;
+
+  try {
+    canvas = await window.html2canvas(exportContainer, {
+      scale: 3,
+      useCORS: true,
+      backgroundColor: null,
+    });
+  } catch (_error) {
+    removeExportRootNode();
+    alert("Could not create the wagon wheel image. Please try again.");
+    return;
+  }
 
   const selected = getSelectedPlayer();
   const safePlayerName = sanitizeFileName(selected?.name || "player");
   const safeDate = formatFileDate(state.viewedInningsSavedAt || new Date().toISOString());
-  const link = document.createElement("a");
-  link.href = canvas.toDataURL("image/jpeg", 0.92);
-  link.download = `${safePlayerName}_${safeDate}_wagon_wheel.jpg`;
-  link.click();
+  const defaultFileName = safePlayerName + "_" + safeDate + "_wagon_wheel.jpg";
+
+  const blob = await new Promise((resolve) => {
+    canvas.toBlob(resolve, "image/jpeg", 0.92);
+  });
+
   removeExportRootNode();
+
+  if (!blob) {
+    alert("Could not prepare the wagon wheel image.");
+    return;
+  }
+
+  if (window.showSaveFilePicker) {
+    try {
+      const fileHandle = await window.showSaveFilePicker({
+        suggestedName: defaultFileName,
+        types: [
+          {
+            description: "JPEG Image",
+            accept: {
+              "image/jpeg": [".jpg", ".jpeg"]
+            }
+          }
+        ]
+      });
+
+      const writable = await fileHandle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return;
+    } catch (error) {
+      if (error && error.name === "AbortError") {
+        return;
+      }
+    }
+  }
+  const finalName = defaultFileName;
+
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = finalName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  window.setTimeout(() => {
+    URL.revokeObjectURL(link.href);
+  }, 1000);
 }
 
 async function exportWagonWheelImageDataForHistory(requestId) {
@@ -1673,6 +1914,7 @@ function render() {
 }
 
 loadState();
+applyCurrentPlayerSetupFromSession();
 setupRunSelection();
 setupGroundOverlay();
 setupShotCapture();
@@ -1722,6 +1964,7 @@ function clearCurrentWagonWheelSession() {
   state.wagonWheel.inningsBallsByPlayer = {};
   state.wagonWheel.shotsByPlayer = {};
 
+  sessionStorage.removeItem("wagonWheelInnings");
   localStorage.removeItem("wagonWheelInnings");
 
   renderRunSelection();
@@ -1837,3 +2080,235 @@ function setupWagonWheelBackBehavior() {
 }
 
 document.addEventListener("DOMContentLoaded", setupWagonWheelBackBehavior);
+
+async function ensureHtml2CanvasForWagonWheel() {
+  if (typeof window.html2canvas === "function") {
+    return true;
+  }
+
+  await new Promise((resolve) => {
+    const existing = document.querySelector('script[data-cv-html2canvas="true"]');
+
+    if (existing) {
+      existing.addEventListener("load", resolve, { once: true });
+      existing.addEventListener("error", resolve, { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
+    script.async = true;
+    script.dataset.cvHtml2canvas = "true";
+    script.onload = resolve;
+    script.onerror = resolve;
+    document.head.appendChild(script);
+  });
+
+  return typeof window.html2canvas === "function";
+}
+
+downloadWagonWheelImage = async function downloadWagonWheelImageFixed() {
+  const loaded = await ensureHtml2CanvasForWagonWheel();
+
+  if (!loaded) {
+    alert("Download tool could not load. Check internet connection and try again.");
+    return;
+  }
+
+  const exportContainer = createExportContainer();
+
+  let canvas;
+
+  try {
+    canvas = await window.html2canvas(exportContainer, {
+      scale: 3,
+      useCORS: true,
+      backgroundColor: null
+    });
+  } catch (_error) {
+    removeExportRootNode();
+    alert("Could not create the wagon wheel image. Please try again.");
+    return;
+  }
+
+  removeExportRootNode();
+
+  const selected = getSelectedPlayer();
+  const safePlayerName = sanitizeFileName(selected?.name || "player");
+  const safeDate = formatFileDate(state.viewedInningsSavedAt || new Date().toISOString());
+  const defaultFileName = safePlayerName + "_" + safeDate + "_wagon_wheel.jpg";
+
+  const blob = await new Promise((resolve) => {
+    canvas.toBlob(resolve, "image/jpeg", 0.92);
+  });
+
+  if (!blob) {
+    alert("Could not prepare the wagon wheel image.");
+    return;
+  }
+
+  if (window.showSaveFilePicker) {
+    try {
+      const fileHandle = await window.showSaveFilePicker({
+        suggestedName: defaultFileName,
+        types: [
+          {
+            description: "JPEG Image",
+            accept: {
+              "image/jpeg": [".jpg", ".jpeg"]
+            }
+          }
+        ]
+      });
+
+      const writable = await fileHandle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return;
+    } catch (error) {
+      if (error && error.name === "AbortError") {
+        return;
+      }
+    }
+  }
+  const finalName = defaultFileName;
+
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = finalName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  window.setTimeout(() => {
+    URL.revokeObjectURL(link.href);
+  }, 1000);
+};
+
+
+/* CREASEVISION COMPLETE INNINGS DOWNLOAD VISIBILITY FIX */
+(() => {
+  "use strict";
+
+  function showExportBlockNow() {
+    const block = document.getElementById("download-export-block");
+
+    if (!block) {
+      return;
+    }
+
+    block.classList.remove("is-hidden");
+    block.hidden = false;
+    block.style.display = "grid";
+  }
+
+  function hideCompleteModalNow() {
+    const modal = document.getElementById("innings-confirm-modal");
+
+    if (!modal) {
+      return;
+    }
+
+    modal.classList.add("is-hidden");
+  }
+
+  function completeInningsSafely() {
+    try {
+      if (typeof completeInningsAndContinue === "function") {
+        completeInningsAndContinue();
+      } else {
+        if (typeof saveInningsState === "function") {
+          const completedRecord = saveInningsState();
+
+          if (typeof appendInningsToHistory === "function") {
+            appendInningsToHistory(completedRecord);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Complete innings failed:", error);
+    }
+
+    showExportBlockNow();
+  }
+
+  function bindCompleteInningsDownloadFlow() {
+    const completeButton = document.getElementById("complete-innings-btn");
+    const yesButton = document.getElementById("confirm-innings-yes");
+    const noButton = document.getElementById("confirm-innings-no");
+    const modal = document.getElementById("innings-confirm-modal");
+
+    if (completeButton && modal) {
+      completeButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        modal.classList.remove("is-hidden");
+      }, true);
+    }
+
+    if (noButton) {
+      noButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        hideCompleteModalNow();
+      }, true);
+    }
+
+    if (yesButton) {
+      yesButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        hideCompleteModalNow();
+        completeInningsSafely();
+      }, true);
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bindCompleteInningsDownloadFlow);
+  } else {
+    bindCompleteInningsDownloadFlow();
+  }
+})();
+
+
+/* CREASEVISION RETURN DASHBOARD CLEAR FIX */
+(() => {
+  "use strict";
+
+  function clearActiveWagonWheelBeforeDashboard() {
+    try {
+      if (typeof clearCurrentWagonWheelSession === "function") {
+        clearCurrentWagonWheelSession();
+      } else {
+        sessionStorage.removeItem("wagonWheelInnings");
+        localStorage.removeItem("wagonWheelInnings");
+      }
+    } catch {
+      sessionStorage.removeItem("wagonWheelInnings");
+      localStorage.removeItem("wagonWheelInnings");
+    }
+  }
+
+  function bindReturnDashboardClear() {
+    const returnButton = document.getElementById("return-dashboard-btn");
+
+    if (!returnButton) {
+      return;
+    }
+
+    returnButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+
+      clearActiveWagonWheelBeforeDashboard();
+      window.location.href = "dashboard.html";
+    }, true);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bindReturnDashboardClear);
+  } else {
+    bindReturnDashboardClear();
+  }
+})();
+

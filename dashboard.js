@@ -1,3 +1,69 @@
+(function () {
+  "use strict";
+
+  const CV_PRIVATE_STORAGE_KEYS = [
+    "profileName",
+    "profileImageUrl",
+    "playerSetup",
+    "groundSetup",
+    "creasevisionBowlers",
+    "creasevisionBowlerMode",
+    "creasevisionSelectedBowlerIndex",
+    "creasevisionPitchDeliveries",
+    "wagonWheelInnings",
+    "wagonWheelHistory",
+    "cww_history_view_record_id",
+    "cww_history_auto_export"
+  ];
+
+  function cvSafeParse(value) {
+    try {
+      return value ? JSON.parse(value) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function cvGetStorageUserId() {
+    const sessionKeys = ["cww_session_user", "creasevisionUserProfile", "currentUser"];
+
+    for (const key of sessionKeys) {
+      const user = cvSafeParse(localStorage.getItem(key));
+      if (!user || typeof user !== "object") {
+        continue;
+      }
+
+      const possibleId = String(
+        user.uid ||
+        user.id ||
+        user.userId ||
+        user.email ||
+        user.username ||
+        user.name ||
+        ""
+      ).trim();
+
+      if (possibleId) {
+        return possibleId.toLowerCase().replace(/[^a-z0-9_.@-]+/g, "_");
+      }
+    }
+
+    return "guest";
+  }
+
+  if (typeof window.CWWScopedKey !== "function") {
+    window.CWWScopedKey = function CWWScopedKey(key) {
+      return "creasevision:" + cvGetStorageUserId() + ":" + key;
+    };
+  }
+
+  CV_PRIVATE_STORAGE_KEYS.forEach(function (key) {
+    try {
+      localStorage.removeItem(key);
+    } catch {}
+  });
+})();
+
 const modePresetButton = document.getElementById("mode-preset");
 const modeCustomButton = document.getElementById("mode-custom");
 
@@ -60,7 +126,7 @@ function saveGroundSetup() {
     savedAt: new Date().toISOString(),
   };
 
-  localStorage.setItem("groundSetup", JSON.stringify(payload));
+  localStorage.setItem(CWWScopedKey("groundSetup"), JSON.stringify(payload));
 }
 
 function clampBoundary(value) {

@@ -9,6 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="dashboard.css" />
   <link rel="stylesheet" href="bowler-setup.css" />
+  <script src="cv-storage-privacy-guard.js"></script>
 </head>
 <body>
   <div class="dashboard-shell">
@@ -50,7 +51,7 @@
           </div>
 
           <label class="setup-field-label" for="bowler-name">Bowler Name</label>
-          <input id="bowler-name" class="setup-input" type="text" />
+          <input id="bowler-name" class="setup-input" type="text" placeholder="Enter your name here" autocomplete="off" />
 
           <p class="setup-field-label">Bowling Style</p>
           <div class="mode-toggle">
@@ -87,10 +88,7 @@
     </main>
   </div>
 
-  <script src="auth-header.js" defer></script>
-  <script src="bowler-setup.js?v=1780376392599" defer></script>
-
-<script id="cv-bowler-profile-sync">
+  <script id="cv-bowler-profile-sync">
 (function () {
   function parseJson(value, fallback) {
     try {
@@ -102,7 +100,7 @@
   }
 
   function getIdentity() {
-    const playerSetup = parseJson(localStorage.getItem("playerSetup"), null);
+    const playerSetup = parseJson(localStorage.getItem(CWWScopedKey("playerSetup")), null);
 
     if (playerSetup && Array.isArray(playerSetup.players) && playerSetup.players.length > 0) {
       const player = playerSetup.players[0] || {};
@@ -130,20 +128,20 @@
     }
 
     return {
-      name: String(localStorage.getItem("profileName") || "").trim(),
-      avatar: String(localStorage.getItem("profileImageUrl") || "").trim()
+      name: String(localStorage.getItem(CWWScopedKey("profileName")) || "").trim(),
+      avatar: String(localStorage.getItem(CWWScopedKey("profileImageUrl")) || "").trim()
     };
   }
 
   function getBowlers() {
-    const parsed = parseJson(localStorage.getItem("creasevisionBowlers"), []);
+    const parsed = parseJson(localStorage.getItem(CWWScopedKey("creasevisionBowlers")), []);
     return Array.isArray(parsed) ? parsed : [];
   }
 
   function saveSyncedBowler() {
     const identity = getIdentity();
     const bowlers = getBowlers();
-    const selectedIndexRaw = Number(localStorage.getItem("creasevisionSelectedBowlerIndex") || "0");
+    const selectedIndexRaw = Number(localStorage.getItem(CWWScopedKey("creasevisionSelectedBowlerIndex")) || "0");
     const selectedIndex = Number.isInteger(selectedIndexRaw) && selectedIndexRaw >= 0 ? selectedIndexRaw : 0;
     const existing = bowlers[selectedIndex] || {};
 
@@ -154,19 +152,19 @@
       avatar: identity.avatar || String(existing.avatar || "")
     };
 
-    const mode = localStorage.getItem("creasevisionBowlerMode") === "team" ? "team" : "individual";
+    const mode = localStorage.getItem(CWWScopedKey("creasevisionBowlerMode")) === "team" ? "team" : "individual";
 
     if (mode === "individual") {
-      localStorage.setItem("creasevisionBowlerMode", "individual");
-      localStorage.setItem("creasevisionSelectedBowlerIndex", "0");
-      localStorage.setItem("creasevisionBowlers", JSON.stringify([syncedBowler]));
+      localStorage.setItem(CWWScopedKey("creasevisionBowlerMode"), "individual");
+      localStorage.setItem(CWWScopedKey("creasevisionSelectedBowlerIndex"), "0");
+      localStorage.setItem(CWWScopedKey("creasevisionBowlers"), JSON.stringify([syncedBowler]));
       return { bowler: syncedBowler, bowlers: [syncedBowler], selectedIndex: 0, mode: "individual" };
     }
 
     bowlers[selectedIndex] = syncedBowler;
-    localStorage.setItem("creasevisionBowlerMode", "team");
-    localStorage.setItem("creasevisionSelectedBowlerIndex", String(selectedIndex));
-    localStorage.setItem("creasevisionBowlers", JSON.stringify(bowlers));
+    localStorage.setItem(CWWScopedKey("creasevisionBowlerMode"), "team");
+    localStorage.setItem(CWWScopedKey("creasevisionSelectedBowlerIndex"), String(selectedIndex));
+    localStorage.setItem(CWWScopedKey("creasevisionBowlers"), JSON.stringify(bowlers));
 
     return { bowler: syncedBowler, bowlers: bowlers, selectedIndex: selectedIndex, mode: "team" };
   }
@@ -278,5 +276,9 @@
   window.addEventListener("pageshow", applyBowlerProfile);
 })();
 </script>
+
+  <script src="auth-header.js?v=1780872597953" defer></script>
+  <script src="bowler-setup.js?v=1780872597953" defer></script>
+
 </body>
 </html>

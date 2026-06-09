@@ -1,977 +1,578 @@
-const tabs = {
-  login: {
-    tab: document.getElementById("tab-login"),
-    panel: document.getElementById("panel-login"),
-  },
-  signup: {
-    tab: document.getElementById("tab-signup"),
-    panel: document.getElementById("panel-signup"),
-  },
-};
+(() => {
+  "use strict";
 
-const loginForm = document.getElementById("login-form");
-const signupForm = document.getElementById("signup-form");
-const authToggle = document.querySelector(".auth-toggle");
-const forgotRequestPanel = document.getElementById("panel-forgot-request");
-const forgotVerifyPanel = document.getElementById("panel-forgot-verify");
-const forgotResetPanel = document.getElementById("panel-forgot-reset");
-
-const loginFeedback = document.getElementById("login-feedback");
-const signupFeedback = document.getElementById("signup-feedback");
-const forgotTrigger = document.getElementById("forgot-password-trigger");
-const forgotRequestBack = document.getElementById("forgot-request-back");
-const forgotVerifyBack = document.getElementById("forgot-verify-back");
-const forgotResetBack = document.getElementById("forgot-reset-back");
-const forgotResendOtp = document.getElementById("forgot-resend-otp");
-const forgotRequestForm = document.getElementById("forgot-request-form");
-const forgotVerifyForm = document.getElementById("forgot-verify-form");
-const forgotResetForm = document.getElementById("forgot-reset-form");
-const forgotEmailInput = document.getElementById("forgot-email");
-const forgotOtpInput = document.getElementById("forgot-otp");
-const forgotNewPasswordInput = document.getElementById("forgot-new-password");
-const forgotConfirmPasswordInput = document.getElementById("forgot-confirm-password");
-const forgotFeedback = document.getElementById("forgot-feedback");
-const forgotVerifyFeedback = document.getElementById("forgot-verify-feedback");
-const forgotResetFeedback = document.getElementById("forgot-reset-feedback");
-const signupEmailInput = document.getElementById("signup-email");
-const signupPasswordInput = document.getElementById("signup-password");
-const signupEmailError = document.getElementById("signup-email-error");
-const signupPasswordError = document.getElementById("signup-password-error");
-const fieldStage = document.querySelector(".field-stage");
-const pitchStrip = document.querySelector(".pitch-strip");
-const outerFieldRing = document.querySelector(".outer-field-ring");
-const strikerCrease = document.querySelector(".crease.top");
-
-const STATIC_AUTH_MODE =
-  window.location.hostname.endsWith("github.io") ||
-  window.location.protocol === "file:";
-const LOCAL_USERS_KEY = "cww_local_users";
-const LOCAL_SESSION_KEY = "cww_session_user";
-
-const BASE_URL =
-  window.location.hostname === "localhost"
-    ? "http://localhost:5000"
-    : "";
-
-let forgotFlowEmail = "";
-
-function toAuthUrl(path) {
-  return `${BASE_URL}${path}`;
-}
-
-function toAppUrl(path) {
-  if (STATIC_AUTH_MODE) {
-    return String(path || "").replace(/^\//, "");
-  }
-
-  return toAuthUrl(path);
-}
-
-function loadLocalUsers() {
-  try {
-    const raw = localStorage.getItem(LOCAL_USERS_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveLocalUsers(users) {
-  localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(users));
-}
-
-function getLocalSessionUser() {
-  try {
-    const raw = localStorage.getItem(LOCAL_SESSION_KEY);
-    if (!raw) {
-      return null;
-    }
-
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") {
-      return null;
-    }
-
-    return {
-      name: String(parsed.name || "User"),
-      email: String(parsed.email || ""),
-      isGuest: Boolean(parsed.isGuest),
-    };
-  } catch {
-    return null;
-  }
-}
-
-function setLocalSessionUser(user) {
-  const payload = {
-    name: String(user?.name || "User"),
-    email: String(user?.email || ""),
-    isGuest: Boolean(user?.isGuest),
-    savedAt: new Date().toISOString(),
-  };
-
-  localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(payload));
-}
-
-function findLocalUserByEmail(email) {
-  const target = String(email || "").trim().toLowerCase();
-  return loadLocalUsers().find((user) => String(user.email || "").trim().toLowerCase() === target) || null;
-}
-
-function switchTab(target) {
-  Object.entries(tabs).forEach(([key, value]) => {
-    const isActive = key === target;
-    value.tab.classList.toggle("active", isActive);
-    value.tab.setAttribute("aria-selected", String(isActive));
-    value.panel.classList.toggle("active", isActive);
-
-    if (isActive) {
-      value.panel.removeAttribute("hidden");
-    } else {
-      value.panel.setAttribute("hidden", "true");
-    }
-  });
-}
-
-function switchAuthView(view) {
-  const viewPanels = {
-    login: tabs.login.panel,
-    signup: tabs.signup.panel,
-    forgotRequest: forgotRequestPanel,
-    forgotVerify: forgotVerifyPanel,
-    forgotReset: forgotResetPanel,
-  };
-
-  Object.values(viewPanels).forEach((panel) => {
-    if (!panel) {
-      return;
-    }
-
-    panel.classList.remove("active");
-    panel.setAttribute("hidden", "true");
-  });
-
-  if (viewPanels[view]) {
-    viewPanels[view].classList.add("active");
-    viewPanels[view].removeAttribute("hidden");
-  }
-
-  const showingPrimary = view === "login" || view === "signup";
-  if (authToggle) {
-    authToggle.hidden = !showingPrimary;
-  }
-
-  if (showingPrimary) {
-    switchTab(view);
-  }
-}
-
-function clearFieldStates(form) {
-  form.querySelectorAll("input").forEach((input) => {
-    input.classList.remove("input-error", "input-success");
-  });
-}
-
-function markFields(form, invalidNames) {
-  form.querySelectorAll("input").forEach((input) => {
-    const invalid = invalidNames.includes(input.name);
-    input.classList.toggle("input-error", invalid);
-    input.classList.toggle("input-success", !invalid && input.value.trim().length > 0);
-  });
-}
-
-function setFeedback(target, type, messages) {
-  target.className = `feedback state ${type}`;
-  target.innerHTML = messages.map((message) => `<div>${message}</div>`).join("");
-}
-
-function clearFeedback(target) {
-  target.className = "feedback";
-  target.textContent = "";
-}
-
-async function postJson(url, payload) {
-  const response = await fetch(toAuthUrl(url), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+  const tabs = {
+    login: {
+      tab: document.getElementById("tab-login"),
+      panel: document.getElementById("panel-login"),
     },
-    credentials: "include",
-    body: JSON.stringify(payload),
-  });
-
-  let responseData = null;
-  try {
-    responseData = await response.json();
-  } catch {
-    responseData = null;
-  }
-
-  return {
-    ok: response.ok,
-    status: response.status,
-    data: responseData,
+    signup: {
+      tab: document.getElementById("tab-signup"),
+      panel: document.getElementById("panel-signup"),
+    },
   };
-}
 
-function validateEmail(email) {
-  return /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(email);
-}
+  const authToggle = document.querySelector(".auth-toggle");
 
-function validatePassword(password) {
-  const issues = [];
+  const forgotRequestPanel = document.getElementById("panel-forgot-request");
+  const forgotVerifyPanel = document.getElementById("panel-forgot-verify");
+  const forgotResetPanel = document.getElementById("panel-forgot-reset");
 
-  if (password.length < 8) {
-    issues.push("Use at least 8 characters.");
-  }
-  if (!/[A-Z]/.test(password)) {
-    issues.push("Add at least one uppercase letter.");
-  }
-  if (!/[a-z]/.test(password)) {
-    issues.push("Add at least one lowercase letter.");
-  }
-  if (!/\d/.test(password)) {
-    issues.push("Add at least one number.");
-  }
-  if (!/[^A-Za-z0-9]/.test(password)) {
-    issues.push("Add at least one special character.");
+  const forgotTrigger = document.getElementById("forgot-password-trigger");
+  const forgotRequestBack = document.getElementById("forgot-request-back");
+  const forgotVerifyBack = document.getElementById("forgot-verify-back");
+  const forgotResetBack = document.getElementById("forgot-reset-back");
+  const forgotResendOtp = document.getElementById("forgot-resend-otp");
+
+  const forgotRequestForm = document.getElementById("forgot-request-form");
+  const forgotVerifyForm = document.getElementById("forgot-verify-form");
+  const forgotResetForm = document.getElementById("forgot-reset-form");
+
+  const forgotEmailInput = document.getElementById("forgot-email");
+  const forgotOtpInput = document.getElementById("forgot-otp");
+  const forgotNewPasswordInput = document.getElementById("forgot-new-password");
+
+  const forgotFeedback = document.getElementById("forgot-feedback");
+  const forgotVerifyFeedback = document.getElementById("forgot-verify-feedback");
+  const forgotResetFeedback = document.getElementById("forgot-reset-feedback");
+
+  const signupEmailInput = document.getElementById("signup-email");
+  const signupPasswordInput = document.getElementById("signup-password");
+  const signupEmailError = document.getElementById("signup-email-error");
+  const signupPasswordError = document.getElementById("signup-password-error");
+
+  const fieldStage = document.querySelector(".field-stage");
+  const pitchStrip = document.querySelector(".pitch-strip");
+  const outerFieldRing = document.querySelector(".outer-field-ring");
+  const strikerCrease = document.querySelector(".crease.top");
+
+  function validateEmail(email) {
+    return /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(email);
   }
 
-  return issues;
-}
+  function validatePassword(password) {
+    const issues = [];
 
-function setInlineFieldError(target, messages) {
-  if (!target) {
-    return;
+    if (password.length < 8) {
+      issues.push("Use at least 8 characters.");
+    }
+
+    if (!/[A-Z]/.test(password)) {
+      issues.push("Add at least one uppercase letter.");
+    }
+
+    if (!/[a-z]/.test(password)) {
+      issues.push("Add at least one lowercase letter.");
+    }
+
+    if (!/\d/.test(password)) {
+      issues.push("Add at least one number.");
+    }
+
+    if (!/[^A-Za-z0-9]/.test(password)) {
+      issues.push("Add at least one special character.");
+    }
+
+    return issues;
   }
 
-  if (!messages || messages.length === 0) {
+  function setInlineFieldError(target, messages) {
+    if (!target) {
+      return;
+    }
+
+    if (!messages || messages.length === 0) {
+      target.textContent = "";
+      return;
+    }
+
+    target.innerHTML = messages.map((message) => "<div>" + message + "</div>").join("");
+  }
+
+  function clearFeedback(target) {
+    if (!target) {
+      return;
+    }
+
+    target.className = "feedback";
     target.textContent = "";
-    return;
   }
 
-  target.innerHTML = messages.map((message) => `<div>${message}</div>`).join("");
-}
+  function setFeedback(target, type, messages) {
+    if (!target) {
+      return;
+    }
 
-function setupSignupRealtimeValidation() {
-  if (!signupEmailInput || !signupPasswordInput) {
-    return;
+    target.className = "feedback state " + type;
+    target.innerHTML = messages.map((message) => "<div>" + message + "</div>").join("");
   }
 
-  signupEmailInput.addEventListener("input", () => {
-    const email = signupEmailInput.value.trim();
-
-    if (!email) {
-      signupEmailInput.classList.remove("input-error", "input-success");
-      setInlineFieldError(signupEmailError, []);
-      return;
-    }
-
-    if (!validateEmail(email)) {
-      signupEmailInput.classList.add("input-error");
-      signupEmailInput.classList.remove("input-success");
-      setInlineFieldError(signupEmailError, ["Please enter a valid email address."]);
-      return;
-    }
-
-    signupEmailInput.classList.remove("input-error");
-    signupEmailInput.classList.add("input-success");
-    setInlineFieldError(signupEmailError, []);
-  });
-
-  signupPasswordInput.addEventListener("input", () => {
-    const password = signupPasswordInput.value;
-
-    if (!password) {
-      signupPasswordInput.classList.remove("input-error", "input-success");
-      setInlineFieldError(signupPasswordError, []);
-      return;
-    }
-
-    const issues = validatePassword(password);
-    if (issues.length > 0) {
-      signupPasswordInput.classList.add("input-error");
-      signupPasswordInput.classList.remove("input-success");
-      setInlineFieldError(signupPasswordError, issues);
-      return;
-    }
-
-    signupPasswordInput.classList.remove("input-error");
-    signupPasswordInput.classList.add("input-success");
-    setInlineFieldError(signupPasswordError, []);
-  });
-}
-
-function setupTabs() {
-  tabs.login.tab.addEventListener("click", () => switchAuthView("login"));
-  tabs.signup.tab.addEventListener("click", () => switchAuthView("signup"));
-}
-
-function setupLoginValidation() {
-  loginForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    clearFieldStates(loginForm);
-    clearFeedback(loginFeedback);
-
-    const formData = new FormData(loginForm);
-    const email = String(formData.get("email") || "").trim();
-    const password = String(formData.get("password") || "");
-
-    const errors = [];
-    const invalidNames = [];
-
-    if (!email) {
-      errors.push("Email is required.");
-      invalidNames.push("email");
-    } else if (!validateEmail(email)) {
-      errors.push("Please enter a valid email address.");
-      invalidNames.push("email");
-    }
-
-    if (!password) {
-      errors.push("Password is required.");
-      invalidNames.push("password");
-    }
-
-    if (errors.length > 0) {
-      markFields(loginForm, invalidNames);
-      setFeedback(loginFeedback, "error", errors);
-      return;
-    }
-
-    markFields(loginForm, []);
-
-    if (STATIC_AUTH_MODE) {
-      const user = findLocalUserByEmail(email);
-      if (!user || String(user.password || "") !== password) {
-        setFeedback(loginFeedback, "error", ["Invalid email or password."]);
+  function switchTab(target) {
+    Object.entries(tabs).forEach(([key, value]) => {
+      if (!value.tab || !value.panel) {
         return;
       }
 
-      setLocalSessionUser({ name: user.name, email: user.email, isGuest: false });
-      setFeedback(loginFeedback, "success", ["Login successful."]);
-      window.setTimeout(() => {
-        window.location.href = toAppUrl("/dashboard.html");
-      }, 350);
-      return;
-    }
+      const isActive = key === target;
 
-    try {
-      const result = await postJson("/login", { email, password });
-      if (!result.ok) {
-        const message = result.data?.message || "Login failed. Please try again.";
-        setFeedback(loginFeedback, "error", [message]);
+      value.tab.classList.toggle("active", isActive);
+      value.tab.setAttribute("aria-selected", String(isActive));
+      value.panel.classList.toggle("active", isActive);
+
+      if (isActive) {
+        value.panel.removeAttribute("hidden");
+      } else {
+        value.panel.setAttribute("hidden", "true");
+      }
+    });
+  }
+
+  function switchAuthView(view) {
+    const viewPanels = {
+      login: tabs.login.panel,
+      signup: tabs.signup.panel,
+      forgotRequest: forgotRequestPanel,
+      forgotVerify: forgotVerifyPanel,
+      forgotReset: forgotResetPanel,
+    };
+
+    Object.values(viewPanels).forEach((panel) => {
+      if (!panel) {
         return;
       }
 
-      setFeedback(loginFeedback, "success", [result.data?.message || "Login successful."]);
-      window.setTimeout(() => {
-        window.location.href = toAppUrl("/dashboard.html");
-      }, 350);
-    } catch (_error) {
-      setFeedback(loginFeedback, "error", ["Unable to connect to the server. Please try again."]);
-    }
-  });
-}
+      panel.classList.remove("active");
+      panel.setAttribute("hidden", "true");
+    });
 
-function setupSignupValidation() {
-  signupForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    clearFieldStates(signupForm);
-    clearFeedback(signupFeedback);
-    setInlineFieldError(signupEmailError, []);
-    setInlineFieldError(signupPasswordError, []);
-
-    const formData = new FormData(signupForm);
-    const name = String(formData.get("name") || "").trim();
-    const email = String(formData.get("email") || "").trim();
-    const password = String(formData.get("password") || "");
-    const confirmPassword = String(formData.get("confirmPassword") || "");
-
-    const errors = [];
-    const invalidNames = [];
-
-    if (!name) {
-      errors.push("Name is required.");
-      invalidNames.push("name");
+    if (viewPanels[view]) {
+      viewPanels[view].classList.add("active");
+      viewPanels[view].removeAttribute("hidden");
     }
 
-    if (!email) {
-      errors.push("Email is required.");
-      invalidNames.push("email");
-    } else if (!validateEmail(email)) {
-      errors.push("Please enter a valid email address.");
-      invalidNames.push("email");
-      setInlineFieldError(signupEmailError, ["Please enter a valid email address."]);
+    const showingPrimary = view === "login" || view === "signup";
+
+    if (authToggle) {
+      authToggle.hidden = !showingPrimary;
     }
 
-    if (!password) {
-      errors.push("Password is required.");
-      invalidNames.push("password");
-    } else {
-      const passwordIssues = validatePassword(password);
-      if (passwordIssues.length > 0) {
-        errors.push(...passwordIssues);
-        invalidNames.push("password");
-        setInlineFieldError(signupPasswordError, passwordIssues);
-      }
+    if (showingPrimary) {
+      switchTab(view);
     }
+  }
 
-    if (!confirmPassword) {
-      errors.push("Confirm your password.");
-      invalidNames.push("confirmPassword");
-    } else if (password !== confirmPassword) {
-      errors.push("Passwords do not match.");
-      invalidNames.push("confirmPassword");
-    }
+  function setupSignupRealtimeValidation() {
+    if (signupEmailInput) {
+      signupEmailInput.addEventListener("input", () => {
+        const email = signupEmailInput.value.trim();
 
-    if (errors.length > 0) {
-      markFields(signupForm, invalidNames);
-      setFeedback(signupFeedback, "error", errors);
-      return;
-    }
+        if (!email) {
+          signupEmailInput.classList.remove("input-error", "input-success");
+          setInlineFieldError(signupEmailError, []);
+          return;
+        }
 
-    markFields(signupForm, []);
+        if (!validateEmail(email)) {
+          signupEmailInput.classList.add("input-error");
+          signupEmailInput.classList.remove("input-success");
+          setInlineFieldError(signupEmailError, ["Please enter a valid email address."]);
+          return;
+        }
 
-    if (STATIC_AUTH_MODE) {
-      const users = loadLocalUsers();
-      const exists = users.some((user) => String(user.email || "").trim().toLowerCase() === email.toLowerCase());
-      if (exists) {
-        setFeedback(signupFeedback, "error", ["An account with this email already exists."]);
-        return;
-      }
-
-      users.push({
-        name,
-        email,
-        password,
-        createdAt: new Date().toISOString(),
+        signupEmailInput.classList.remove("input-error");
+        signupEmailInput.classList.add("input-success");
+        setInlineFieldError(signupEmailError, []);
       });
-      saveLocalUsers(users);
-
-      setFeedback(signupFeedback, "success", [`Welcome, ${name}! Your account setup is complete.`]);
-      signupForm.reset();
-      clearFieldStates(signupForm);
-      setInlineFieldError(signupEmailError, []);
-      setInlineFieldError(signupPasswordError, []);
-      return;
     }
 
-    try {
-      const result = await postJson("/signup", { name, email, password });
-      if (!result.ok) {
-        const responseErrors = Array.isArray(result.data?.errors) ? result.data.errors : [];
-        const fallbackMessage = result.data?.message || "Unable to create account. Please try again.";
-        setFeedback(signupFeedback, "error", responseErrors.length > 0 ? responseErrors : [fallbackMessage]);
-        return;
-      }
+    if (signupPasswordInput) {
+      signupPasswordInput.addEventListener("input", () => {
+        const password = signupPasswordInput.value;
 
-      setFeedback(signupFeedback, "success", [result.data?.message || `Welcome, ${name}! Your account setup is complete.`]);
-      signupForm.reset();
-      clearFieldStates(signupForm);
-      setInlineFieldError(signupEmailError, []);
-      setInlineFieldError(signupPasswordError, []);
-    } catch (_error) {
-      setFeedback(signupFeedback, "error", ["Unable to connect to the server. Please try again."]);
+        if (!password) {
+          signupPasswordInput.classList.remove("input-error", "input-success");
+          setInlineFieldError(signupPasswordError, []);
+          return;
+        }
+
+        const issues = validatePassword(password);
+
+        if (issues.length > 0) {
+          signupPasswordInput.classList.add("input-error");
+          signupPasswordInput.classList.remove("input-success");
+          setInlineFieldError(signupPasswordError, issues);
+          return;
+        }
+
+        signupPasswordInput.classList.remove("input-error");
+        signupPasswordInput.classList.add("input-success");
+        setInlineFieldError(signupPasswordError, []);
+      });
     }
-  });
-}
+  }
 
-function setupGoogleButtons() {
-  document.querySelectorAll("[data-google-action]").forEach((button) => {
-    button.addEventListener("click", async () => {
-      const action = button.getAttribute("data-google-action") === "signup" ? "signup" : "login";
-      const targetFeedback = action === "signup" ? signupFeedback : loginFeedback;
-      clearFeedback(targetFeedback);
+  function resetForgotFlowState() {
+    forgotRequestForm?.reset();
+    forgotVerifyForm?.reset();
+    forgotResetForm?.reset();
 
-      if (STATIC_AUTH_MODE) {
-        setFeedback(targetFeedback, "error", [
-          "Google sign-in is unavailable on GitHub Pages static hosting.",
-          "Use Login/Sign up forms or Continue as Guest.",
+    clearFeedback(forgotFeedback);
+    clearFeedback(forgotVerifyFeedback);
+    clearFeedback(forgotResetFeedback);
+  }
+
+  function setupForgotPasswordFlow() {
+    if (forgotTrigger) {
+      forgotTrigger.addEventListener("click", () => {
+        resetForgotFlowState();
+        switchAuthView("forgotRequest");
+        forgotEmailInput?.focus();
+      });
+    }
+
+    if (forgotRequestBack) {
+      forgotRequestBack.addEventListener("click", () => {
+        resetForgotFlowState();
+        switchAuthView("login");
+      });
+    }
+
+    if (forgotVerifyBack) {
+      forgotVerifyBack.addEventListener("click", () => {
+        clearFeedback(forgotVerifyFeedback);
+        switchAuthView("forgotRequest");
+        forgotEmailInput?.focus();
+      });
+    }
+
+    if (forgotResetBack) {
+      forgotResetBack.addEventListener("click", () => {
+        clearFeedback(forgotResetFeedback);
+        switchAuthView("forgotVerify");
+        forgotOtpInput?.focus();
+      });
+    }
+
+    if (forgotResendOtp) {
+      forgotResendOtp.addEventListener("click", () => {
+        setFeedback(forgotVerifyFeedback, "error", [
+          "Forgot password is not connected in static mode yet."
         ]);
-        return;
-      }
+      });
+    }
 
-      try {
-        const healthResponse = await fetch(toAuthUrl("/health"), {
-          method: "GET",
-          credentials: "include",
-        });
-        const health = await healthResponse.json();
+    if (forgotRequestForm) {
+      forgotRequestForm.addEventListener("submit", (event) => {
+        event.preventDefault();
 
-        if (!healthResponse.ok || !health.dbReady) {
-          setFeedback(targetFeedback, "error", [
-            "Google sign-in is unavailable right now because the database is not connected.",
-            "Start MongoDB and retry.",
+        const email = String(new FormData(forgotRequestForm).get("email") || "").trim().toLowerCase();
+
+        if (!email) {
+          setFeedback(forgotFeedback, "error", ["Email is required."]);
+          return;
+        }
+
+        if (!validateEmail(email)) {
+          setFeedback(forgotFeedback, "error", ["Please enter a valid email address."]);
+          return;
+        }
+
+        setFeedback(forgotFeedback, "error", [
+          "Forgot password is not connected in static mode yet."
+        ]);
+      });
+    }
+
+    if (forgotVerifyForm) {
+      forgotVerifyForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        setFeedback(forgotVerifyFeedback, "error", [
+          "OTP verification is not connected in static mode yet."
+        ]);
+      });
+    }
+
+    if (forgotResetForm) {
+      forgotResetForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+
+        const formData = new FormData(forgotResetForm);
+        const newPassword = String(formData.get("newPassword") || "");
+        const confirmNewPassword = String(formData.get("confirmNewPassword") || "");
+
+        const issues = validatePassword(newPassword);
+
+        if (issues.length > 0) {
+          setFeedback(forgotResetFeedback, "error", issues);
+          return;
+        }
+
+        if (newPassword !== confirmNewPassword) {
+          setFeedback(forgotResetFeedback, "error", [
+            "Password mismatch. Please confirm your new password."
           ]);
           return;
         }
-      } catch (_error) {
-        setFeedback(targetFeedback, "error", ["Unable to connect to the server. Please try again."]);
-        return;
-      }
 
-      window.location.href = toAppUrl(`/auth/google?mode=${action}`);
-    });
-  });
-}
-
-async function checkAuthenticatedUser() {
-  if (STATIC_AUTH_MODE) {
-    return getLocalSessionUser();
-  }
-
-  try {
-    const response = await fetch(toAuthUrl("/auth/me"), { method: "GET", credentials: "include" });
-    if (!response.ok) {
-      return null;
-    }
-
-    const data = await response.json();
-    return data.user || null;
-  } catch (_error) {
-    return null;
-  }
-}
-
-async function setupOAuthResultFeedback() {
-  const params = new URLSearchParams(window.location.search);
-  const auth = params.get("auth");
-  const mode = params.get("mode") === "signup" ? "signup" : "login";
-
-  if (!auth) {
-    return;
-  }
-
-  const target = mode === "signup" ? signupFeedback : loginFeedback;
-  clearFeedback(target);
-
-  if (auth === "success") {
-    const user = await checkAuthenticatedUser();
-    if (user) {
-      setFeedback(target, "success", [`Google authentication successful. Welcome ${user.name}.`]);
-    } else {
-      setFeedback(target, "error", ["Google authentication finished, but session was not found."]);
-    }
-  } else {
-    setFeedback(target, "error", ["Google authentication failed. Please try again."]);
-  }
-
-  window.history.replaceState({}, document.title, window.location.pathname);
-}
-
-function resetForgotFlowState() {
-  forgotFlowEmail = "";
-  forgotRequestForm?.reset();
-  forgotVerifyForm?.reset();
-  forgotResetForm?.reset();
-  clearFeedback(forgotFeedback);
-  clearFeedback(forgotVerifyFeedback);
-  clearFeedback(forgotResetFeedback);
-}
-
-function setupForgotPasswordFlow() {
-  if (!forgotTrigger || !forgotRequestForm || !forgotVerifyForm || !forgotResetForm) {
-    return;
-  }
-
-  forgotTrigger.addEventListener("click", () => {
-    clearFeedback(loginFeedback);
-    resetForgotFlowState();
-    switchAuthView("forgotRequest");
-    if (forgotEmailInput) {
-      forgotEmailInput.focus();
-    }
-  });
-
-  forgotRequestBack?.addEventListener("click", () => {
-    resetForgotFlowState();
-    switchAuthView("login");
-  });
-
-  forgotVerifyBack?.addEventListener("click", () => {
-    clearFeedback(forgotVerifyFeedback);
-    switchAuthView("forgotRequest");
-    forgotEmailInput?.focus();
-  });
-
-  forgotResetBack?.addEventListener("click", () => {
-    clearFeedback(forgotResetFeedback);
-    switchAuthView("forgotVerify");
-    forgotOtpInput?.focus();
-  });
-
-  forgotRequestForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    clearFeedback(forgotFeedback);
-
-    const email = String(new FormData(forgotRequestForm).get("email") || "").trim().toLowerCase();
-    if (!email) {
-      setFeedback(forgotFeedback, "error", ["Email is required."]);
-      return;
-    }
-
-    if (!validateEmail(email)) {
-      setFeedback(forgotFeedback, "error", ["Please enter a valid email address."]);
-      return;
-    }
-
-    if (STATIC_AUTH_MODE) {
-      setFeedback(forgotFeedback, "error", ["Forgot password is unavailable on static hosting."]);
-      return;
-    }
-
-    try {
-      const result = await postJson("/auth/password/request-otp", { email });
-      if (!result.ok) {
-        setFeedback(forgotFeedback, "error", [result.data?.message || "Unable to send OTP right now. Please try again."]);
-        return;
-      }
-
-      forgotFlowEmail = email;
-      clearFeedback(forgotFeedback);
-      setFeedback(forgotVerifyFeedback, "success", [result.data?.message || "OTP sent to your email."]);
-      switchAuthView("forgotVerify");
-      forgotOtpInput?.focus();
-    } catch (_error) {
-      setFeedback(forgotFeedback, "error", ["Unable to connect to the server. Please try again."]);
-    }
-  });
-
-  forgotResendOtp?.addEventListener("click", async () => {
-    clearFeedback(forgotVerifyFeedback);
-
-    if (!forgotFlowEmail) {
-      setFeedback(forgotVerifyFeedback, "error", ["Enter your registered email first."]);
-      switchAuthView("forgotRequest");
-      return;
-    }
-
-    try {
-      const result = await postJson("/auth/password/request-otp", { email: forgotFlowEmail });
-      if (!result.ok) {
-        setFeedback(forgotVerifyFeedback, "error", [result.data?.message || "Unable to send OTP right now. Please try again."]);
-        return;
-      }
-
-      forgotVerifyForm?.reset();
-      setFeedback(forgotVerifyFeedback, "success", [result.data?.message || "OTP sent to your email."]);
-    } catch (_error) {
-      setFeedback(forgotVerifyFeedback, "error", ["Unable to connect to the server. Please try again."]);
-    }
-  });
-
-  forgotVerifyForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    clearFeedback(forgotVerifyFeedback);
-
-    const otp = String(new FormData(forgotVerifyForm).get("otp") || "").trim();
-    if (!forgotFlowEmail) {
-      setFeedback(forgotVerifyFeedback, "error", ["Start again by entering your registered email."]);
-      switchAuthView("forgotRequest");
-      return;
-    }
-
-    if (!otp) {
-      setFeedback(forgotVerifyFeedback, "error", ["OTP is required."]);
-      return;
-    }
-
-    try {
-      const result = await postJson("/auth/password/verify-otp", { email: forgotFlowEmail, otp });
-      if (!result.ok) {
-        setFeedback(forgotVerifyFeedback, "error", [result.data?.message || "Unable to verify OTP right now. Please try again."]);
-        return;
-      }
-
-      setFeedback(forgotVerifyFeedback, "success", [result.data?.message || "OTP verified. You can now reset your password."]);
-      switchAuthView("forgotReset");
-      forgotNewPasswordInput?.focus();
-    } catch (_error) {
-      setFeedback(forgotVerifyFeedback, "error", ["Unable to connect to the server. Please try again."]);
-    }
-  });
-
-  forgotResetForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    clearFeedback(forgotResetFeedback);
-
-    const formData = new FormData(forgotResetForm);
-    const newPassword = String(formData.get("newPassword") || "");
-    const confirmNewPassword = String(formData.get("confirmNewPassword") || "");
-
-    if (!forgotFlowEmail) {
-      setFeedback(forgotResetFeedback, "error", ["Start again by entering your registered email."]);
-      switchAuthView("forgotRequest");
-      return;
-    }
-
-    const issues = validatePassword(newPassword);
-    if (issues.length > 0) {
-      setFeedback(forgotResetFeedback, "error", issues);
-      return;
-    }
-
-    if (newPassword !== confirmNewPassword) {
-      setFeedback(forgotResetFeedback, "error", ["Password mismatch. Please confirm your new password."]);
-      return;
-    }
-
-    try {
-      const result = await postJson("/auth/password/reset", {
-        email: forgotFlowEmail,
-        newPassword,
-        confirmNewPassword,
+        setFeedback(forgotResetFeedback, "error", [
+          "Password reset is not connected in static mode yet."
+        ]);
       });
+    }
+  }
 
-      if (!result.ok) {
-        const errors = Array.isArray(result.data?.errors) ? result.data.errors : [];
-        setFeedback(
-          forgotResetFeedback,
-          "error",
-          errors.length > 0 ? errors : [result.data?.message || "Unable to reset password right now. Please try again."]
+  function wait(ms) {
+    return new Promise((resolve) => {
+      window.setTimeout(resolve, ms);
+    });
+  }
+
+  function createShotLayer(stage) {
+    const namespace = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(namespace, "svg");
+    svg.classList.add("shot-overlay");
+    svg.setAttribute("viewBox", "0 0 100 100");
+    svg.setAttribute("preserveAspectRatio", "none");
+
+    const referencePath = document.createElementNS(namespace, "path");
+    referencePath.classList.add("shot-reference-path");
+
+    const activeTrail = document.createElementNS(namespace, "path");
+    activeTrail.classList.add("shot-active-trail");
+
+    svg.appendChild(referencePath);
+    svg.appendChild(activeTrail);
+
+    const ball = document.createElement("div");
+    ball.classList.add("wagon-ball");
+
+    stage.appendChild(svg);
+    stage.appendChild(ball);
+
+    return { svg, referencePath, activeTrail, ball };
+  }
+
+  function getReplayGeometry() {
+    const stageRect = fieldStage.getBoundingClientRect();
+    const pitchRect = pitchStrip.getBoundingClientRect();
+    const ringRect = outerFieldRing.getBoundingClientRect();
+    const creaseRect = strikerCrease?.getBoundingClientRect();
+
+    const startX = creaseRect
+      ? creaseRect.left + creaseRect.width / 2 - stageRect.left
+      : pitchRect.left + pitchRect.width / 2 - stageRect.left;
+
+    const startY = creaseRect
+      ? creaseRect.top + creaseRect.height / 2 - stageRect.top
+      : pitchRect.top + pitchRect.height * 0.14 - stageRect.top;
+
+    return {
+      width: stageRect.width,
+      height: stageRect.height,
+      startX,
+      startY,
+      ringCenterX: ringRect.left + ringRect.width / 2 - stageRect.left,
+      ringCenterY: ringRect.top + ringRect.height / 2 - stageRect.top,
+      ringRadiusX: ringRect.width / 2,
+      ringRadiusY: ringRect.height / 2,
+    };
+  }
+
+  function normalizeDistance(distance) {
+    if (!Number.isFinite(distance)) {
+      return 1;
+    }
+
+    if (distance > 1) {
+      return Math.min(Math.max(distance / 100, 0), 1);
+    }
+
+    return Math.min(Math.max(distance, 0), 1);
+  }
+
+  function getBoundaryIntersectionDistance(start, direction, geometry) {
+    const offsetX = start.x - geometry.ringCenterX;
+    const offsetY = start.y - geometry.ringCenterY;
+
+    const a =
+      (direction.x * direction.x) / (geometry.ringRadiusX * geometry.ringRadiusX) +
+      (direction.y * direction.y) / (geometry.ringRadiusY * geometry.ringRadiusY);
+
+    const b =
+      (2 * offsetX * direction.x) / (geometry.ringRadiusX * geometry.ringRadiusX) +
+      (2 * offsetY * direction.y) / (geometry.ringRadiusY * geometry.ringRadiusY);
+
+    const c =
+      (offsetX * offsetX) / (geometry.ringRadiusX * geometry.ringRadiusX) +
+      (offsetY * offsetY) / (geometry.ringRadiusY * geometry.ringRadiusY) -
+      1;
+
+    const discriminant = b * b - 4 * a * c;
+
+    if (!Number.isFinite(discriminant) || discriminant < 0) {
+      return 0;
+    }
+
+    const sqrtDiscriminant = Math.sqrt(discriminant);
+    const t1 = (-b - sqrtDiscriminant) / (2 * a);
+    const t2 = (-b + sqrtDiscriminant) / (2 * a);
+    const candidates = [t1, t2].filter((value) => Number.isFinite(value) && value > 0);
+
+    if (candidates.length === 0) {
+      return 0;
+    }
+
+    return Math.max(...candidates);
+  }
+
+  function buildShotPath(geometry, shot) {
+    const angleRadians = (shot.angle * Math.PI) / 180;
+
+    const direction = {
+      x: Math.cos(angleRadians),
+      y: Math.sin(angleRadians),
+    };
+
+    const start = {
+      x: geometry.startX,
+      y: geometry.startY,
+    };
+
+    const travel = getBoundaryIntersectionDistance(start, direction, geometry);
+
+    const end = {
+      x: start.x + direction.x * travel,
+      y: start.y + direction.y * travel,
+    };
+
+    const control = {
+      x: (start.x + end.x) / 2,
+      y: (start.y + end.y) / 2,
+    };
+
+    return { start, control, end };
+  }
+
+  function pointOnQuadratic(path, t) {
+    const inverse = 1 - t;
+
+    return {
+      x: inverse * inverse * path.start.x + 2 * inverse * t * path.control.x + t * t * path.end.x,
+      y: inverse * inverse * path.start.y + 2 * inverse * t * path.control.y + t * t * path.end.y,
+    };
+  }
+
+  function toPathD(path) {
+    return "M " + path.start.x.toFixed(2) + " " + path.start.y.toFixed(2) +
+      " Q " + path.control.x.toFixed(2) + " " + path.control.y.toFixed(2) +
+      " " + path.end.x.toFixed(2) + " " + path.end.y.toFixed(2);
+  }
+
+  function easeOutCubic(value) {
+    return 1 - Math.pow(1 - value, 3);
+  }
+
+  function animateShot(pathLayer, path, durationMs) {
+    return new Promise((resolve) => {
+      const startTime = performance.now();
+
+      pathLayer.referencePath.setAttribute("d", toPathD(path));
+      pathLayer.activeTrail.style.opacity = "1";
+      pathLayer.ball.style.opacity = "1";
+
+      function frame(now) {
+        const elapsed = now - startTime;
+        const progress = Math.min(elapsed / durationMs, 1);
+        const easedProgress = easeOutCubic(progress);
+
+        const head = pointOnQuadratic(path, easedProgress);
+        const tailProgress = Math.max(0, easedProgress - 0.12);
+        const tail = pointOnQuadratic(path, tailProgress);
+
+        pathLayer.ball.style.left = head.x + "px";
+        pathLayer.ball.style.top = head.y + "px";
+        pathLayer.activeTrail.setAttribute(
+          "d",
+          "M " + tail.x.toFixed(2) + " " + tail.y.toFixed(2) +
+          " L " + head.x.toFixed(2) + " " + head.y.toFixed(2)
         );
-        return;
+
+        if (progress < 1) {
+          requestAnimationFrame(frame);
+        } else {
+          resolve();
+        }
       }
 
-      setFeedback(forgotResetFeedback, "success", [result.data?.message || "Password reset successful. You can now log in."]);
-      setFeedback(loginFeedback, "success", ["Password reset successful. Please log in with your new password."]);
-      resetForgotFlowState();
-      switchAuthView("login");
-    } catch (_error) {
-      setFeedback(forgotResetFeedback, "error", ["Unable to connect to the server. Please try again."]);
+      requestAnimationFrame(frame);
+    });
+  }
+
+  async function replayShotsSequentially(pathLayer, shots, pauseMs, targetCycleMs) {
+    if (!fieldStage || !pitchStrip || !outerFieldRing || !Array.isArray(shots) || shots.length === 0) {
+      return;
     }
-  });
-}
 
-function wait(ms) {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
-}
+    const availableMotionBudget = Math.max(3000, targetCycleMs - shots.length * pauseMs);
+    const weightedDistances = shots.map((shot) => 0.65 + normalizeDistance(shot.distance) * 0.7);
+    const totalWeight = weightedDistances.reduce((sum, value) => sum + value, 0);
 
-function createShotLayer(stage) {
-  const namespace = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(namespace, "svg");
-  svg.classList.add("shot-overlay");
-  svg.setAttribute("viewBox", "0 0 100 100");
-  svg.setAttribute("preserveAspectRatio", "none");
+    for (let index = 0; index < shots.length; index += 1) {
+      const shot = shots[index];
+      const geometry = getReplayGeometry();
+      const path = buildShotPath(geometry, shot);
 
-  const referencePath = document.createElementNS(namespace, "path");
-  referencePath.classList.add("shot-reference-path");
+      const weightedShare = weightedDistances[index] / totalWeight;
+      const duration = Math.max(500, Math.min(2200, availableMotionBudget * weightedShare));
 
-  const activeTrail = document.createElementNS(namespace, "path");
-  activeTrail.classList.add("shot-active-trail");
+      await animateShot(pathLayer, path, duration);
+      await wait(pauseMs);
+    }
 
-  svg.appendChild(referencePath);
-  svg.appendChild(activeTrail);
-
-  const ball = document.createElement("div");
-  ball.classList.add("wagon-ball");
-
-  stage.appendChild(svg);
-  stage.appendChild(ball);
-
-  return { svg, referencePath, activeTrail, ball };
-}
-
-function getReplayGeometry() {
-  const stageRect = fieldStage.getBoundingClientRect();
-  const pitchRect = pitchStrip.getBoundingClientRect();
-  const ringRect = outerFieldRing.getBoundingClientRect();
-  const creaseRect = strikerCrease?.getBoundingClientRect();
-
-  const startX = creaseRect
-    ? creaseRect.left + creaseRect.width / 2 - stageRect.left
-    : pitchRect.left + pitchRect.width / 2 - stageRect.left;
-
-  const startY = creaseRect
-    ? creaseRect.top + creaseRect.height / 2 - stageRect.top
-    : pitchRect.top + pitchRect.height * 0.14 - stageRect.top;
-
-  return {
-    width: stageRect.width,
-    height: stageRect.height,
-    startX,
-    startY,
-    ringCenterX: ringRect.left + ringRect.width / 2 - stageRect.left,
-    ringCenterY: ringRect.top + ringRect.height / 2 - stageRect.top,
-    ringRadiusX: ringRect.width / 2,
-    ringRadiusY: ringRect.height / 2,
-  };
-}
-
-function normalizeDistance(distance) {
-  if (!Number.isFinite(distance)) {
-    return 1;
+    pathLayer.activeTrail.style.opacity = "0";
   }
 
-  if (distance > 1) {
-    return Math.min(Math.max(distance / 100, 0), 1);
-  }
+  function setupShotReplay() {
+    if (!fieldStage || !pitchStrip || !outerFieldRing) {
+      return;
+    }
 
-  return Math.min(Math.max(distance, 0), 1);
-}
+    if (fieldStage.querySelector(".shot-overlay") || fieldStage.querySelector(".wagon-ball")) {
+      return;
+    }
 
-function getBoundaryIntersectionDistance(start, direction, geometry) {
-  const offsetX = start.x - geometry.ringCenterX;
-  const offsetY = start.y - geometry.ringCenterY;
+    const sectorCount = 8;
+    const sectorAngle = 360 / sectorCount;
+    const firstSectorStart = -180;
 
-  const a =
-    (direction.x * direction.x) / (geometry.ringRadiusX * geometry.ringRadiusX) +
-    (direction.y * direction.y) / (geometry.ringRadiusY * geometry.ringRadiusY);
-  const b =
-    (2 * offsetX * direction.x) / (geometry.ringRadiusX * geometry.ringRadiusX) +
-    (2 * offsetY * direction.y) / (geometry.ringRadiusY * geometry.ringRadiusY);
-  const c =
-    (offsetX * offsetX) / (geometry.ringRadiusX * geometry.ringRadiusX) +
-    (offsetY * offsetY) / (geometry.ringRadiusY * geometry.ringRadiusY) -
-    1;
+    const shotQueue = Array.from({ length: sectorCount }, (_, index) => ({
+      angle: firstSectorStart + sectorAngle * index + sectorAngle / 2,
+      distance: 1,
+      curve: 0,
+    }));
 
-  const discriminant = b * b - 4 * a * c;
-  if (!Number.isFinite(discriminant) || discriminant < 0) {
-    return 0;
-  }
+    const pathLayer = createShotLayer(fieldStage);
+    const pauseBetweenShots = 420;
+    const targetCycleDuration = 10000;
 
-  const sqrtDiscriminant = Math.sqrt(discriminant);
-  const t1 = (-b - sqrtDiscriminant) / (2 * a);
-  const t2 = (-b + sqrtDiscriminant) / (2 * a);
-  const candidates = [t1, t2].filter((value) => Number.isFinite(value) && value > 0);
-
-  if (candidates.length === 0) {
-    return 0;
-  }
-
-  return Math.max(...candidates);
-}
-
-function buildShotPath(geometry, shot) {
-  const angleRadians = (shot.angle * Math.PI) / 180;
-  const direction = {
-    x: Math.cos(angleRadians),
-    y: Math.sin(angleRadians),
-  };
-
-  const start = {
-    x: geometry.startX,
-    y: geometry.startY,
-  };
-
-  const travel = getBoundaryIntersectionDistance(start, direction, geometry);
-
-  const end = {
-    x: start.x + direction.x * travel,
-    y: start.y + direction.y * travel,
-  };
-
-  const control = {
-    x: (start.x + end.x) / 2,
-    y: (start.y + end.y) / 2,
-  };
-
-  return { start, control, end };
-}
-
-function pointOnQuadratic(path, t) {
-  const inverse = 1 - t;
-  return {
-    x: inverse * inverse * path.start.x + 2 * inverse * t * path.control.x + t * t * path.end.x,
-    y: inverse * inverse * path.start.y + 2 * inverse * t * path.control.y + t * t * path.end.y,
-  };
-}
-
-function toPathD(path) {
-  return `M ${path.start.x.toFixed(2)} ${path.start.y.toFixed(2)} Q ${path.control.x.toFixed(2)} ${path.control.y.toFixed(2)} ${path.end.x.toFixed(2)} ${path.end.y.toFixed(2)}`;
-}
-
-function easeOutCubic(value) {
-  return 1 - Math.pow(1 - value, 3);
-}
-
-function animateShot(pathLayer, path, durationMs) {
-  return new Promise((resolve) => {
-    const startTime = performance.now();
-    pathLayer.referencePath.setAttribute("d", toPathD(path));
-    pathLayer.activeTrail.style.opacity = "1";
-    pathLayer.ball.style.opacity = "1";
-
-    function frame(now) {
-      const elapsed = now - startTime;
-      const progress = Math.min(elapsed / durationMs, 1);
-      const easedProgress = easeOutCubic(progress);
-
-      const head = pointOnQuadratic(path, easedProgress);
-      const tailProgress = Math.max(0, easedProgress - 0.12);
-      const tail = pointOnQuadratic(path, tailProgress);
-
-      pathLayer.ball.style.left = `${head.x}px`;
-      pathLayer.ball.style.top = `${head.y}px`;
-      pathLayer.activeTrail.setAttribute("d", `M ${tail.x.toFixed(2)} ${tail.y.toFixed(2)} L ${head.x.toFixed(2)} ${head.y.toFixed(2)}`);
-
-      if (progress < 1) {
-        requestAnimationFrame(frame);
-      } else {
-        resolve();
+    async function runLoop() {
+      while (document.body.contains(fieldStage)) {
+        await replayShotsSequentially(pathLayer, shotQueue, pauseBetweenShots, targetCycleDuration);
       }
     }
 
-    requestAnimationFrame(frame);
-  });
-}
-
-async function replayShotsSequentially(pathLayer, shots, pauseMs, targetCycleMs) {
-  if (!fieldStage || !pitchStrip || !outerFieldRing || !Array.isArray(shots) || shots.length === 0) {
-    return;
+    runLoop();
   }
 
-  const availableMotionBudget = Math.max(3000, targetCycleMs - shots.length * pauseMs);
-  const weightedDistances = shots.map((shot) => 0.65 + normalizeDistance(shot.distance) * 0.7);
-  const totalWeight = weightedDistances.reduce((sum, value) => sum + value, 0);
-
-  for (let index = 0; index < shots.length; index += 1) {
-    const shot = shots[index];
-    const geometry = getReplayGeometry();
-    const path = buildShotPath(geometry, shot);
-
-    const weightedShare = weightedDistances[index] / totalWeight;
-    const duration = Math.max(500, Math.min(2200, availableMotionBudget * weightedShare));
-
-    await animateShot(pathLayer, path, duration);
-    await wait(pauseMs);
+  function init() {
+    setupSignupRealtimeValidation();
+    setupForgotPasswordFlow();
+    setupShotReplay();
   }
 
-  pathLayer.activeTrail.style.opacity = "0";
-}
-
-function setupShotReplay() {
-  const sectorCount = 8;
-  const sectorAngle = 360 / sectorCount;
-  const firstSectorStart = -180;
-  const shotQueue = Array.from({ length: sectorCount }, (_, index) => ({
-    angle: firstSectorStart + sectorAngle * index + sectorAngle / 2,
-    distance: 1,
-    curve: 0,
-  }));
-
-  const pathLayer = createShotLayer(fieldStage);
-  const pauseBetweenShots = 420;
-  const targetCycleDuration = 10000;
-
-  async function runLoop() {
-    while (true) {
-      await replayShotsSequentially(pathLayer, shotQueue, pauseBetweenShots, targetCycleDuration);
-    }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
   }
-
-  runLoop();
-}
-
-setupTabs();
-setupLoginValidation();
-setupSignupValidation();
-setupSignupRealtimeValidation();
-setupForgotPasswordFlow();
-setupGoogleButtons();
-setupOAuthResultFeedback();
-setupShotReplay();
+})();

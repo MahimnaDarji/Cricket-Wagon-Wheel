@@ -1138,3 +1138,15 @@ button {
 #undo-shot-main-btn:active {
   transform: translateY(0) !important;
 }
+
+
+/* Match Undo button typography exactly with Select Runs */
+.runs-control-block #wagon-wheel-toggle,
+.runs-control-block #undo-shot-main-btn {
+  font-family: "Oswald", sans-serif !important;
+  font-size: 1rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+  line-height: 1 !important;
+}

@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="dashboard.css" />
+  <script src="cv-storage-privacy-guard.js"></script>
 </head>
 <body>
   <div class="dashboard-shell">
@@ -99,7 +100,52 @@
     </main>
   </div>
 
-  <script src="auth-header.js" defer></script>
+  <script src="auth-header.js?v=1780872387286" defer></script>
   <script src="dashboard.js" defer></script>
+
+
+
+
+<script id="profile-setup-guard">
+(() => {
+  "use strict";
+
+  function waitForAuth(callback, attempts = 0) {
+    if (window.CWWAuth && typeof window.CWWAuth.getSessionUser === "function") {
+      callback();
+      return;
+    }
+
+    if (attempts > 60) {
+      window.location.href = "index.html";
+      return;
+    }
+
+    window.setTimeout(() => waitForAuth(callback, attempts + 1), 50);
+  }
+
+  function getSetupDoneKey(email) {
+    return "cv_profile_setup_done::" + String(email || "").trim().toLowerCase();
+  }
+
+  waitForAuth(async () => {
+    const user = await window.CWWAuth.getSessionUser();
+
+    if (!user || !user.email) {
+      window.location.href = "index.html";
+      return;
+    }
+
+    const setupDone =
+      sessionStorage.getItem("cv_profile_setup_done") === "1" ||
+      localStorage.getItem(getSetupDoneKey(user.email)) === "1";
+
+    if (!setupDone) {
+      window.location.href = "profile-setup.html";
+    }
+  });
+})();
+</script>
+
 </body>
 </html>

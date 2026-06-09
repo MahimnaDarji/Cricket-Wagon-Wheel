@@ -1702,3 +1702,11 @@
 #undo-delivery-btn:active {
   transform: translateY(0) !important;
 }
+
+
+/* CV_PITCH_EXPORT_DOT_SIZE_START */
+.pitch-map-export-root .delivery-dot {
+  width: 9.5px !important;
+  height: 9.5px !important;
+}
+/* CV_PITCH_EXPORT_DOT_SIZE_END */
